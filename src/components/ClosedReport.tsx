@@ -77,6 +77,28 @@ export default function ClosedReport({ shifts, expenses, vehicle, profile, onBac
 
   const { filteredShifts, title, subtitle } = getFilteredData();
 
+  // Group filtered shifts by month year YYYY-MM
+  const shiftsByMonth = React.useMemo(() => {
+    const groups: { [key: string]: Shift[] } = {};
+    filteredShifts.forEach(s => {
+      const monthKey = s.date ? s.date.substring(0, 7) : 'Sem Data';
+      if (!groups[monthKey]) {
+        groups[monthKey] = [];
+      }
+      groups[monthKey].push(s);
+    });
+    return groups;
+  }, [filteredShifts]);
+
+  // Format YYYY-MM code dynamically into Portuguese text
+  const formatMonthYearStr = (yearMonthKey: string) => {
+    if (yearMonthKey === 'Sem Data') return 'Sem Data';
+    const [year, month] = yearMonthKey.split('-');
+    const date = new Date(Number(year), Number(month) - 1, 15);
+    const monthStr = date.toLocaleDateString('pt-BR', { month: 'long' });
+    return monthStr.charAt(0).toUpperCase() + monthStr.slice(1) + ' de ' + year;
+  };
+
   // Core Math
   const totalWorkedHours = filteredShifts.reduce((acc, curr) => acc + curr.hoursWorked, 0);
   const totalKm = filteredShifts.reduce((acc, curr) => acc + curr.totalKm, 0);
@@ -430,44 +452,74 @@ export default function ClosedReport({ shifts, expenses, vehicle, profile, onBac
           </div>
         </div>
 
-        {/* Individual Shifts Log Table inside the period */}
-        {filteredShifts.length > 1 && (
-          <div className="space-y-2 relative z-10">
+        {/* Individual Shifts Log Tables organized by Month */}
+        {filteredShifts.length > 0 && (
+          <div className="space-y-6 relative z-10 text-left">
             <h3 className="text-xs font-bold text-slate-855 uppercase tracking-widest border-b border-slate-100 pb-1 flex items-center gap-1.5">
-              <FileText className="w-4 h-4 text-blue-600" /> Histórico Detalhado do Período
+              <FileText className="w-4 h-4 text-blue-600" /> Histórico Detalhado do Período (Separado por Mês)
             </h3>
-            <div className="border border-slate-150 rounded-xl overflow-hidden">
-              <table className="w-full text-[10px] text-left">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-150 font-extrabold text-slate-500 uppercase">
-                    <th className="py-2 px-3">Data</th>
-                    <th className="py-2 px-3">KM</th>
-                    <th className="py-2 px-3">Horas</th>
-                    <th className="py-2 px-3 text-right">Bruto (R$)</th>
-                    <th className="py-2 px-3 text-right">Custos (R$)</th>
-                    <th className="py-2 px-3 text-right">Líquido (R$)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-medium">
-                  {filteredShifts.map(s => {
-                    const shiftGross = s.uberEarnings + s.earnings99 + s.indriveEarnings + s.privateEarnings + s.otherEarnings;
-                    const shiftCost = s.fuelExpense + s.foodExpense + s.otherExpenses;
-                    const shiftNet = shiftGross - shiftCost;
+            
+            {(Object.entries(shiftsByMonth) as [string, Shift[]][])
+              .sort(([monthA], [monthB]) => monthB.localeCompare(monthA)) // Newest months first
+              .map(([monthKey, monthShifts]) => {
+                const monthGross = monthShifts.reduce((acc, s) => acc + s.uberEarnings + s.earnings99 + s.indriveEarnings + s.privateEarnings + s.otherEarnings, 0);
+                const monthCost = monthShifts.reduce((acc, s) => acc + s.fuelExpense + s.foodExpense + s.otherExpenses, 0);
+                const monthNet = monthGross - monthCost;
 
-                    return (
-                      <tr key={s.id}>
-                        <td className="py-2 px-3 font-bold">{new Date(s.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
-                        <td className="py-2 px-3 font-mono">{s.totalKm} km</td>
-                        <td className="py-2 px-3 font-mono">{s.hoursWorked} hrs</td>
-                        <td className="py-2 px-3 text-right text-emerald-700 font-bold">R$ {shiftGross.toFixed(2)}</td>
-                        <td className="py-2 px-3 text-right text-red-600 font-bold">R$ {shiftCost.toFixed(2)}</td>
-                        <td className="py-2 px-3 text-right text-blue-600 font-black">R$ {shiftNet.toFixed(2)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                return (
+                  <div key={monthKey} className="space-y-2">
+                    {/* Header bar of the specific month */}
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-100/90 px-3.5 py-2.5 rounded-xl border border-slate-200 gap-2">
+                      <span className="text-[11px] font-black text-slate-700 uppercase tracking-wider font-sans">
+                        📅 {formatMonthYearStr(monthKey)}
+                      </span>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] font-mono font-bold text-slate-600">
+                        <span>Faturamento Bruto: <strong className="text-emerald-700">R$ {monthGross.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></span>
+                        <span>Despesas: <strong className="text-red-600">R$ {monthCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></span>
+                        <span>Saldo Líquido: <strong className="text-blue-600">R$ {monthNet.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></span>
+                      </div>
+                    </div>
+
+                    {/* Table of shifts belonging to this month */}
+                    <div className="border border-slate-150 rounded-xl overflow-hidden bg-white shadow-xs">
+                      <table className="w-full text-[10px] text-left">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-150 font-extrabold text-slate-500 uppercase">
+                            <th className="py-2 px-3">Data</th>
+                            <th className="py-2 px-3">Odômetro Inic.</th>
+                            <th className="py-2 px-3">Odômetro Fim</th>
+                            <th className="py-2 px-3">KM Percorrido</th>
+                            <th className="py-2 px-3">Horas</th>
+                            <th className="py-2 px-3 text-right">Bruto (R$)</th>
+                            <th className="py-2 px-3 text-right">Custos (R$)</th>
+                            <th className="py-2 px-3 text-right">Líquido (R$)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                          {monthShifts.map(s => {
+                            const shiftGross = s.uberEarnings + s.earnings99 + s.indriveEarnings + s.privateEarnings + s.otherEarnings;
+                            const shiftCost = s.fuelExpense + s.foodExpense + s.otherExpenses;
+                            const shiftNet = shiftGross - shiftCost;
+
+                            return (
+                              <tr key={s.id} className="hover:bg-slate-50/40">
+                                <td className="py-2.5 px-3 font-bold text-slate-850">{new Date(s.date + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                                <td className="py-2.5 px-3 font-mono text-slate-500">{s.startOdometer.toLocaleString('pt-BR')} km</td>
+                                <td className="py-2.5 px-3 font-mono text-slate-500">{s.endOdometer.toLocaleString('pt-BR')} km</td>
+                                <td className="py-2.5 px-3 font-mono text-slate-950 font-bold">{s.totalKm.toLocaleString('pt-BR')} km</td>
+                                <td className="py-2.5 px-3 font-mono text-slate-600">{s.hoursWorked.toFixed(1)} hrs</td>
+                                <td className="py-2.5 px-3 text-right text-emerald-700 font-bold">R$ {shiftGross.toFixed(2)}</td>
+                                <td className="py-2.5 px-3 text-right text-red-600 font-bold">R$ {shiftCost.toFixed(2)}</td>
+                                <td className="py-2.5 px-3 text-right text-blue-600 font-black">R$ {shiftNet.toFixed(2)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })}
           </div>
         )}
 

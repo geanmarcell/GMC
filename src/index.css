@@ -6,21 +6,27 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
-/* Print Stylesheet for Work Order Certificate */
+/* Print Stylesheet for Work Order Certificate, Monthly Report, and Periodic Statement */
 @media print {
   body * {
     visibility: hidden;
   }
-  #printable-certificate, #printable-certificate * {
+  #printable-certificate, #printable-certificate *,
+  #printable-area, #printable-area *,
+  #printable-statement, #printable-statement * {
     visibility: visible;
   }
-  #printable-certificate {
+  #printable-certificate, #printable-area, #printable-statement {
     position: absolute;
     left: 0;
     top: 0;
     width: 100%;
+    margin: 0;
+    padding: 20px;
+    background: white !important;
+    color: black !important;
   }
-  .no-print {
+  .no-print, .no-print * {
     display: none !important;
   }
 }
