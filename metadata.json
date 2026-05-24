@@ -1,0 +1,6 @@
+{
+  "name": "GMC - Controle Financeiro para Motoristas",
+  "description": "Aplicativo de faturamento e controle de caixa completo para motoristas de aplicativos (Uber, 99, InDrive). Monitore ganhos brutos, custos reais com combustível, alerta de troca de óleo, metas mensais e emita demonstrativos de rendimento com assinatura digital.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
