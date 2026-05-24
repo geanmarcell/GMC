@@ -125,8 +125,11 @@ export default function App() {
     setMaintenanceLog(prev => prev.filter(m => m.id !== id));
   };
 
-  const handleUpdateProfile = (updatedProf: DriverProfile) => {
+  const handleUpdateProfile = (updatedProf: DriverProfile, updatedVehicle?: Vehicle) => {
     setProfile(updatedProf);
+    if (updatedVehicle) {
+      setVehicle(updatedVehicle);
+    }
   };
 
   // Import State from Backup Codes

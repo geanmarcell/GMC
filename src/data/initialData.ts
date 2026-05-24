@@ -22,6 +22,7 @@ export const DEFAULT_PROFILE: DriverProfile = {
   city: 'Rio de Janeiro - RJ',
   dailyGoal: 320.00, // Meta diária de R$ 320,00 brutos
   monthlyGoal: 4500.00, // Meta mensal de faturamento líquido de R$ 4.500,00
+  annualGoal: 54000.00, // Meta anual de faturamento líquido de R$ 54.000,00 (ex: 12 * 4500)
   workingDaysPerWeek: 5
 };
 

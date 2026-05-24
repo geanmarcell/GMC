@@ -12,12 +12,12 @@ import {
   Sparkles,
   Info
 } from 'lucide-react';
-import { DriverProfile, Vehicle } from '../types';
+import { DriverProfile, Vehicle, FuelType } from '../types';
 
 interface GoalsManagerProps {
   profile: DriverProfile;
   vehicle: Vehicle;
-  onUpdateProfile: (p: DriverProfile) => void;
+  onUpdateProfile: (p: DriverProfile, v?: Vehicle) => void;
 }
 
 export default function GoalsManager({ profile, vehicle, onUpdateProfile }: GoalsManagerProps) {
@@ -26,7 +26,14 @@ export default function GoalsManager({ profile, vehicle, onUpdateProfile }: Goal
   const [city, setCity] = useState(profile.city);
   const [dailyGoal, setDailyGoal] = useState(profile.dailyGoal);
   const [monthlyGoal, setMonthlyGoal] = useState(profile.monthlyGoal);
+  const [annualGoal, setAnnualGoal] = useState(profile.annualGoal || (profile.monthlyGoal * 12 || 54000));
   const [workingDays, setWorkingDays] = useState(profile.workingDaysPerWeek);
+
+  // Vehicle settings state
+  const [vehicleModel, setVehicleModel] = useState(vehicle.model || '');
+  const [licensePlate, setLicensePlate] = useState(vehicle.licensePlate || '');
+  const [fuelType, setFuelType] = useState<FuelType>((vehicle.fuelType as FuelType) || 'Gasolina');
+  const [avgConsumption, setAvgConsumption] = useState(vehicle.avgConsumption || 10);
 
   // Simulation State
   const [simHoursPerDay, setSimHoursPerDay] = useState(8);
@@ -35,8 +42,27 @@ export default function GoalsManager({ profile, vehicle, onUpdateProfile }: Goal
   
   const [simDailyKm, setSimDailyKm] = useState(180);
   const [simFuelPrice, setSimFuelPrice] = useState(4.50); // R$ por litro ou m³
+  const [simAvgConsumption, setSimAvgConsumption] = useState(vehicle.avgConsumption || 10);
   const [simWeeklyFixedCost, setSimWeeklyFixedCost] = useState(450); // ex: Aluguel de carro (R$ 450/semana)
   const [simMonthlyCellPlan, setSimMonthlyCellPlan] = useState(75);
+
+  // Sync prop changes to local states
+  React.useEffect(() => {
+    setName(profile.name);
+    setCity(profile.city);
+    setDailyGoal(profile.dailyGoal);
+    setMonthlyGoal(profile.monthlyGoal);
+    setAnnualGoal(profile.annualGoal || (profile.monthlyGoal * 12 || 54000));
+    setWorkingDays(profile.workingDaysPerWeek);
+  }, [profile.name, profile.city, profile.dailyGoal, profile.monthlyGoal, profile.annualGoal, profile.workingDaysPerWeek]);
+
+  React.useEffect(() => {
+    setVehicleModel(vehicle.model || '');
+    setLicensePlate(vehicle.licensePlate || '');
+    setFuelType(vehicle.fuelType || 'Gasolina');
+    setAvgConsumption(vehicle.avgConsumption || 10);
+    setSimAvgConsumption(vehicle.avgConsumption || 10);
+  }, [vehicle.model, vehicle.licensePlate, vehicle.fuelType, vehicle.avgConsumption]);
 
   const handleSaveProfileSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,9 +71,16 @@ export default function GoalsManager({ profile, vehicle, onUpdateProfile }: Goal
       city,
       dailyGoal: Number(dailyGoal),
       monthlyGoal: Number(monthlyGoal),
+      annualGoal: Number(annualGoal),
       workingDaysPerWeek: Number(workingDays)
+    }, {
+      ...vehicle,
+      model: vehicleModel,
+      licensePlate,
+      fuelType,
+      avgConsumption: Number(avgConsumption)
     });
-    alert("Metas e Perfil atualizados com sucesso!");
+    alert("Perfil de trabalho e ficha do veículo atualizados com sucesso!");
   };
 
   // Simulation Calculations (4.33 weeks per month)
@@ -57,8 +90,8 @@ export default function GoalsManager({ profile, vehicle, onUpdateProfile }: Goal
   const projectedGrossMonthlyEarnings = totalWorkedHoursPerMonth * simEarningPerHour;
 
   const totalMonthlyKm = simDailyKm * totalWorkedDaysPerMonth;
-  // fuel needed = total km / average consumption
-  const fuelNeededLiters = totalMonthlyKm / vehicle.avgConsumption;
+  // fuel needed = total km / average consumption in simulation
+  const fuelNeededLiters = totalMonthlyKm / (simAvgConsumption || 1);
   const projectedMonthlyFuelExpense = fuelNeededLiters * simFuelPrice;
 
   const projectedWeeklyRentalExpense = simWeeklyFixedCost * weeksPerMonth;
@@ -116,7 +149,7 @@ export default function GoalsManager({ profile, vehicle, onUpdateProfile }: Goal
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 border-t border-slate-100 pt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-slate-100 pt-4">
               <div>
                 <label className="text-slate-600 font-bold block mb-1">Meta Diária (Bruto R$)</label>
                 <input
@@ -127,7 +160,7 @@ export default function GoalsManager({ profile, vehicle, onUpdateProfile }: Goal
                   onChange={(e) => setDailyGoal(Number(e.target.value))}
                   className="w-full p-2.5 bg-slate-50 border border-slate-205 rounded-xl font-mono font-bold text-slate-800 focus:outline-blue-600"
                 />
-                <p className="text-[9px] text-slate-400 mt-1">Ex: R$ 320 faturamento bruto</p>
+                <p className="text-[9px] text-slate-400 mt-1">Ex: R$ 320 bruto / dia</p>
               </div>
               <div>
                 <label className="text-slate-600 font-bold block mb-1">Meta Líquida Mensal (R$)</label>
@@ -139,7 +172,79 @@ export default function GoalsManager({ profile, vehicle, onUpdateProfile }: Goal
                   onChange={(e) => setMonthlyGoal(Number(e.target.value))}
                   className="w-full p-2.5 bg-slate-50 border border-slate-205 rounded-xl font-mono font-bold text-slate-800 focus:outline-blue-600"
                 />
-                <p className="text-[9px] text-slate-400 mt-1">Ex: R$ 4.500 livre na conta</p>
+                <p className="text-[9px] text-slate-400 mt-1">Ex: R$ 4.500 líquido / mês</p>
+              </div>
+              <div>
+                <label className="text-slate-600 font-bold block mb-1">Meta Líquida Anual (R$)</label>
+                <input
+                  type="number"
+                  step="500"
+                  required
+                  value={annualGoal}
+                  onChange={(e) => setAnnualGoal(Number(e.target.value))}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-205 rounded-xl font-mono font-bold text-slate-800 focus:outline-blue-600"
+                />
+                <p className="text-[9px] text-slate-400 mt-1">Ex: R$ 54.000 líquido / ano</p>
+              </div>
+            </div>
+
+            {/* VEHICLE REGISTRATION BLOCK */}
+            <div className="border-t border-slate-100 pt-4 space-y-3">
+              <h5 className="text-[10px] uppercase font-mono font-black text-slate-400 block pb-1 border-b border-dashed border-slate-100 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Ficha do Veículo de Trabalho
+              </h5>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-600 font-bold block mb-1">Modelo Comercial</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Onix 1.0, HB20"
+                    value={vehicleModel}
+                    onChange={(e) => setVehicleModel(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-205 rounded-xl font-bold text-slate-800 focus:outline-blue-600"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-600 font-bold block mb-1">Placa do Veículo</label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={10}
+                    placeholder="Ex: BRA2E19"
+                    value={licensePlate}
+                    onChange={(e) => setLicensePlate(e.target.value.toUpperCase())}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-205 rounded-xl font-mono font-bold text-slate-750 uppercase focus:outline-blue-600"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-600 font-bold block mb-1">Combustível</label>
+                  <select
+                    value={fuelType}
+                    onChange={(e) => setFuelType(e.target.value as FuelType)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-205 rounded-xl font-bold text-slate-800 focus:outline-blue-600 cursor-pointer"
+                  >
+                    <option value="Gasolina">Gasolina</option>
+                    <option value="Etanol">Etanol</option>
+                    <option value="Flex">Flex (Gasolina/Álcool)</option>
+                    <option value="GNV">GNV (Gás Natural)</option>
+                    <option value="Diesel">Diesel</option>
+                    <option value="Elétrico">Elétrico</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-slate-600 font-bold block mb-1">Autonomia Média (Km/L ou m³)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="1"
+                    required
+                    value={avgConsumption}
+                    onChange={(e) => setAvgConsumption(Number(e.target.value))}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-205 rounded-xl font-mono font-bold text-slate-800 focus:outline-blue-600"
+                  />
+                </div>
               </div>
             </div>
 
@@ -274,6 +379,33 @@ export default function GoalsManager({ profile, vehicle, onUpdateProfile }: Goal
               <p className="text-[9px] text-slate-400 font-normal">Para motoristas com veículo alugado (Localiza, Kovi, etc.) ou financiamento fixo.</p>
             </div>
             
+            {/* Autonomia KM/L Slider & Input combo */}
+            <div className="space-y-1">
+              <div className="flex justify-between text-slate-605">
+                <span>Autonomia Simulador (KM/L ou m³):</span>
+                <span className="text-orange-650 font-black font-mono">{simAvgConsumption} Km/{fuelType === 'GNV' ? 'm³' : 'L'}</span>
+              </div>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="range"
+                  min="4"
+                  max="30"
+                  step="0.1"
+                  value={simAvgConsumption}
+                  onChange={(e) => setSimAvgConsumption(Number(e.target.value))}
+                  className="w-full accent-blue-600 cursor-pointer h-1 bg-slate-100"
+                />
+                <input
+                  type="number"
+                  step="0.1"
+                  min="1"
+                  value={simAvgConsumption}
+                  onChange={(e) => setSimAvgConsumption(Number(e.target.value))}
+                  className="w-16 p-1.5 bg-slate-50 border border-slate-205 rounded-xl font-mono font-bold text-center text-[10px] text-slate-700 focus:outline-blue-600"
+                />
+              </div>
+            </div>
+
             {/* Daily KM and Fuel Price */}
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -282,7 +414,7 @@ export default function GoalsManager({ profile, vehicle, onUpdateProfile }: Goal
                   type="number"
                   value={simDailyKm}
                   onChange={(e) => setSimDailyKm(Number(e.target.value))}
-                  className="w-full p-2 bg-slate-50 border border-slate-205 rounded-xl font-mono text-slate-700"
+                  className="w-full p-2 bg-slate-50 border border-slate-205 rounded-xl font-mono text-slate-700 font-bold"
                 />
               </div>
               <div>
@@ -292,7 +424,7 @@ export default function GoalsManager({ profile, vehicle, onUpdateProfile }: Goal
                   step="0.01"
                   value={simFuelPrice}
                   onChange={(e) => setSimFuelPrice(Number(e.target.value))}
-                  className="w-full p-2 bg-slate-50 border border-slate-205 rounded-xl font-mono text-slate-705"
+                  className="w-full p-2 bg-slate-50 border border-slate-205 rounded-xl font-mono text-slate-700 font-bold"
                 />
               </div>
             </div>
@@ -302,7 +434,7 @@ export default function GoalsManager({ profile, vehicle, onUpdateProfile }: Goal
           {/* Core computations simulator dashboard Outputs */}
           <div className="lg:col-span-2 bg-slate-50 rounded-2xl border border-slate-210 p-5 space-y-4 flex flex-col justify-between">
             <div>
-              <span className="text-[10px] uppercase font-mono font-black text-slate-400 tracking-wider">Fechamento Mensal Projetado</span>
+              <span className="text-[10px] uppercase font-mono font-black text-slate-400 tracking-wider">Fechamento Mensal Projetado (Fórmula Meu KM)</span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mt-3">
                 
                 {/* Gross revenue forecast */}
@@ -316,7 +448,7 @@ export default function GoalsManager({ profile, vehicle, onUpdateProfile }: Goal
                 <div className="p-3 bg-white rounded-xl border border-slate-200">
                   <span className="text-[9px] uppercase font-bold text-red-650">Gasto Est. Combustível</span>
                   <p className="text-xl font-black text-red-700 font-mono mt-0.5">R$ {projectedMonthlyFuelExpense.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
-                  <p className="text-[9px] text-slate-400 font-normal mt-0.5">Consumo médio Onix: {vehicle.avgConsumption} Km/L GNV</p>
+                  <p className="text-[9px] text-slate-400 font-normal mt-0.5">Eficiência simulada: {simAvgConsumption} Km/{fuelType === 'GNV' ? 'm³' : 'L'}</p>
                 </div>
 
                 {/* Simulated fixed rents */}
@@ -328,7 +460,7 @@ export default function GoalsManager({ profile, vehicle, onUpdateProfile }: Goal
 
                 {/* Net Earnings profit */}
                 <div className="p-4 bg-gradient-to-r from-blue-700 to-slate-800 text-white rounded-xl border border-blue-900/40">
-                  <span className="text-[9px] uppercase font-black text-blue-200 block tracking-widest">Lucro Líquido Esperado (Melhor Cenário)</span>
+                  <span className="text-[9px] uppercase font-black text-blue-200 block tracking-widest">Lucro Líquido Esperado (Margem Livre)</span>
                   <p className="text-2xl font-black font-mono mt-0.5">R$ {projectedNetMonthlyEarnings.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</p>
                   <p className="text-[9px] text-blue-350 font-normal mt-1 flex items-center gap-1">
                     <Sparkles className="w-3 h-3 text-yellow-400" /> Rendimento real líquido de faturamento
@@ -338,15 +470,23 @@ export default function GoalsManager({ profile, vehicle, onUpdateProfile }: Goal
               </div>
             </div>
 
-            {/* Metrics efficiency comparison column */}
-            <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-205/80 text-[10px] font-semibold text-slate-600 font-mono bg-white p-3.5 rounded-xl border border-slate-210 text-center">
+            {/* Metrics efficiency comparison grid - Meu KM Style */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-slate-205/80 text-[10px] font-semibold text-slate-650 font-mono bg-white p-3.5 rounded-xl border border-slate-210 text-center">
               <div>
-                <p className="text-[8px] text-slate-400 uppercase font-sans tracking-wide">R$ Líquido Real / Hora</p>
-                <p className="text-slate-850 text-xs font-black">R$ {projectedNetPerHour.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                <p className="text-[8px] text-slate-400 uppercase font-sans tracking-wide">Líquido / Hora</p>
+                <p className="text-slate-850 text-xs font-black">R$ {projectedNetPerHour.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/h</p>
               </div>
               <div>
-                <p className="text-[8px] text-slate-400 uppercase font-sans tracking-wide">R$ Líquido Real / KM recorrente</p>
-                <p className="text-slate-850 text-xs font-black">R$ {projectedNetPerKm.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                <p className="text-[8px] text-slate-400 uppercase font-sans tracking-wide">Líquido / KM</p>
+                <p className="text-blue-600 text-xs font-black">R$ {projectedNetPerKm.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/km</p>
+              </div>
+              <div>
+                <p className="text-[8px] text-slate-400 uppercase font-sans tracking-wide">Combustível / KM</p>
+                <p className="text-red-650 text-xs font-black">R$ {(simFuelPrice / (simAvgConsumption || 1)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/km</p>
+              </div>
+              <div>
+                <p className="text-[8px] text-slate-400 uppercase font-sans tracking-wide">Sobra por Turno</p>
+                <p className="text-emerald-700 text-xs font-black">R$ {(projectedNetMonthlyEarnings / (totalWorkedDaysPerMonth || 1)).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}/dia</p>
               </div>
             </div>
 

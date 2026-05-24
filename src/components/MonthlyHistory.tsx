@@ -11,7 +11,7 @@ import {
   ChevronRight,
   ChevronDown,
   FileText,
-  PieChart,
+  PieChart as PieChartIcon,
   Smartphone,
   Sparkles,
   Info
@@ -24,7 +24,10 @@ import {
   YAxis, 
   Tooltip, 
   Legend,
-  CartesianGrid
+  CartesianGrid,
+  PieChart,
+  Pie,
+  Cell
 } from 'recharts';
 import { Shift, Expense, Vehicle, DriverProfile } from '../types';
 
@@ -145,6 +148,43 @@ export default function MonthlyHistory({ shifts, expenses, vehicle, profile }: M
   const netProfitPercentage = activeStats && activeStats.gross > 0 
     ? (activeStats.netProfit / activeStats.gross) * 100 
     : 0;
+
+  // Platform chart data formatting based on selectedMonth
+  const selectedMonthPlatformData = React.useMemo(() => {
+    if (!activeStats) return [];
+    return [
+      { name: 'Uber App', value: activeStats.uber, color: '#09090b' },
+      { name: '99 App', value: activeStats.m99, color: '#facc15' },
+      { name: 'InDrive', value: activeStats.indrive, color: '#14b8a6' },
+      { name: 'Particular', value: activeStats.priv, color: '#2563eb' },
+      { name: 'Gorjetas & Tips', value: activeStats.other, color: '#f97316' }
+    ].filter(item => item.value > 0);
+  }, [activeStats]);
+
+  // Expense Breakdown data formatting based on selectedMonth
+  const selectedMonthExpenseData = React.useMemo(() => {
+    if (!activeStats) return [];
+    
+    const extraGrouped: { [key: string]: number } = {};
+    activeStats.extras.forEach(e => {
+      extraGrouped[e.category] = (extraGrouped[e.category] || 0) + e.value;
+    });
+
+    const list = [
+      { name: 'Combustível (GNV/L)', value: activeStats.fuel, color: '#f97316' },
+      { name: 'Lanches/Alimentação', value: activeStats.food, color: '#fbbf24' },
+      { name: 'Tag / Lava-jato', value: activeStats.tagClean, color: '#06b6d4' }
+    ];
+
+    Object.entries(extraGrouped).forEach(([cat, val]) => {
+      let color = '#64748b'; // default others
+      if (cat === 'Aluguel' || cat === 'Financiamento' || cat === 'Seguro') color = '#8b5cf6';
+      if (cat === 'Celular/Internet') color = '#ec4899';
+      list.push({ name: cat, value: val, color });
+    });
+
+    return list.filter(item => item.value > 0);
+  }, [activeStats]);
 
   return (
     <div className="space-y-6">
@@ -368,6 +408,105 @@ export default function MonthlyHistory({ shifts, expenses, vehicle, profile }: M
               )}
             </div>
 
+          </div>
+
+          {/* MONTHLY DISTRIBUTION CHARTS FOR SELECTED MONTH */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 border border-slate-150 p-5 rounded-xl">
+            {/* PLATFORMS PIE CHART */}
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
+              <span className="text-[10px] uppercase font-mono font-black text-slate-400 tracking-wider block text-left">Ganhos por Plataforma (Neste Mês)</span>
+              
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="h-44 w-full sm:w-1/2 min-w-[160px] relative flex justify-center items-center">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={selectedMonthPlatformData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={65}
+                        paddingAngle={3}
+                        dataKey="value"
+                      >
+                        {selectedMonthPlatformData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value: number) => `R$ ${value.toFixed(2)}`} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center select-none pointer-events-none">
+                    <span className="text-[9px] uppercase font-bold text-slate-400 block">Bruto Mês</span>
+                    <span className="text-xs font-black text-slate-800 font-mono">R$ {activeStats.gross.toFixed(0)}</span>
+                  </div>
+                </div>
+
+                {/* Platform legend details */}
+                <div className="flex-1 space-y-1.5 text-xs font-semibold text-slate-650 w-full text-left">
+                  {selectedMonthPlatformData.map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-[11px]">
+                      <span className="flex items-center gap-1.5 font-bold text-slate-800">
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }}></span>
+                        {item.name}
+                      </span>
+                      <span className="font-mono text-slate-900 font-bold">R$ {item.value.toFixed(0)} ({((item.value / (activeStats.gross || 1))*100).toFixed(0)}%)</span>
+                    </div>
+                  ))}
+                  {selectedMonthPlatformData.length === 0 && (
+                    <p className="text-[10px] text-slate-400 italic">Nenhum faturamento registrado neste mês.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* EXPENSES BREAKDOWN PIE CHART */}
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
+              <span className="text-[10px] uppercase font-mono font-black text-slate-400 tracking-wider block text-left">Distribuição de Custos (Neste Mês)</span>
+              
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="h-44 w-full sm:w-1/2 min-w-[160px] relative flex justify-center items-center">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={selectedMonthExpenseData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={65}
+                        paddingAngle={3}
+                        dataKey="value"
+                      >
+                        {selectedMonthExpenseData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value: number) => `R$ ${value.toFixed(2)}`} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center select-none pointer-events-none">
+                    <span className="text-[9px] uppercase font-bold text-slate-400 block">Custos Mês</span>
+                    <span className="text-xs font-black text-red-650 font-mono">R$ {activeStats.totalExpenses.toFixed(0)}</span>
+                  </div>
+                </div>
+
+                {/* Expense legend details */}
+                <div className="flex-1 space-y-1.5 text-xs font-semibold text-slate-650 w-full text-left">
+                  {selectedMonthExpenseData.map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-[11px]">
+                      <span className="flex items-center gap-1.5 font-bold text-slate-800 font-sans">
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }}></span>
+                        {item.name}
+                      </span>
+                      <span className="font-mono text-red-650 font-bold">R$ {item.value.toFixed(0)} ({((item.value / (activeStats.totalExpenses || 1))*100).toFixed(0)}%)</span>
+                    </div>
+                  ))}
+                  {selectedMonthExpenseData.length === 0 && (
+                    <p className="text-[10px] text-slate-404 italic">Nenhuma despesa ou custo registrado neste mês.</p>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* DRIVING TIME EFFICIENCY STATS FOR SELECTED MONTH */}

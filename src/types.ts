@@ -22,6 +22,7 @@ export interface DriverProfile {
   city: string;
   dailyGoal: number; // Meta diária de ganhos brutos (R$)
   monthlyGoal: number; // Meta mensal de faturamento líquido (R$)
+  annualGoal: number; // Meta anual de faturamento líquido (R$)
   workingDaysPerWeek: number; // Dias de trabalho por semana planejados (ex: 5 ou 6)
 }
 
