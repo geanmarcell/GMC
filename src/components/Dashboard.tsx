@@ -13,7 +13,9 @@ import {
   ChevronRight,
   Plus,
   Compass,
-  Info
+  Info,
+  Calendar,
+  ChevronDown
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -49,6 +51,136 @@ export default function Dashboard({
   onNavigate,
   onSelectReportRange
 }: DashboardProps) {
+
+  // Dynamic Month & Year list generator
+  const getMonthsList = () => {
+    const list = new Set<string>();
+    shifts.forEach(s => {
+      if (s.date) list.add(s.date.substring(0, 7)); // YYYY-MM
+    });
+    expenses.forEach(e => {
+      if (e.date) list.add(e.date.substring(0, 7)); // YYYY-MM
+    });
+    // Fallback if empty to have a starting record
+    if (list.size === 0) {
+      list.add(new Date().toISOString().substring(0, 7));
+    }
+    return Array.from(list).sort((a, b) => b.localeCompare(a));
+  };
+
+  const monthsList = React.useMemo(() => getMonthsList(), [shifts, expenses]);
+  const [selectedMonth, setSelectedMonth] = React.useState<string>(() => monthsList[0] || new Date().toISOString().substring(0, 7));
+  const [chartTab, setChartTab] = React.useState<'month' | 'year'>('month');
+
+  const selectedYear = selectedMonth.substring(0, 4);
+
+  const formatMonthLabel = (yearMonth: string) => {
+    if (!yearMonth) return '';
+    const [year, month] = yearMonth.split('-');
+    const date = new Date(Number(year), Number(month) - 1, 15);
+    const monthStr = date.toLocaleDateString('pt-BR', { month: 'long' });
+    return monthStr.charAt(0).toUpperCase() + monthStr.slice(1) + ' de ' + year;
+  };
+
+  // Monthly breakdown calculations
+  const monthShifts = React.useMemo(() => {
+    return shifts.filter(s => s.date && s.date.startsWith(selectedMonth));
+  }, [shifts, selectedMonth]);
+
+  const monthUber = monthShifts.reduce((acc, curr) => acc + curr.uberEarnings, 0);
+  const month99 = monthShifts.reduce((acc, curr) => acc + curr.earnings99, 0);
+  const monthIndrive = monthShifts.reduce((acc, curr) => acc + curr.indriveEarnings, 0);
+  const monthPrivate = monthShifts.reduce((acc, curr) => acc + curr.privateEarnings, 0);
+  const monthOther = monthShifts.reduce((acc, curr) => acc + curr.otherEarnings, 0);
+  const monthGross = monthUber + month99 + monthIndrive + monthPrivate + monthOther;
+
+  const monthShiftFuel = monthShifts.reduce((acc, curr) => acc + curr.fuelExpense, 0);
+  const monthShiftFood = monthShifts.reduce((acc, curr) => acc + curr.foodExpense, 0);
+  const monthShiftOther = monthShifts.reduce((acc, curr) => acc + curr.otherExpenses, 0);
+  const monthDirectExpenses = monthShiftFuel + monthShiftFood + monthShiftOther;
+
+  const monthFixedExpenses = React.useMemo(() => {
+    return expenses.filter(e => e.date && e.date.startsWith(selectedMonth)).reduce((acc, curr) => acc + curr.value, 0);
+  }, [expenses, selectedMonth]);
+
+  const monthConsolidatedExpenses = monthDirectExpenses + monthFixedExpenses;
+  const monthNet = monthGross - monthConsolidatedExpenses;
+
+  // Annual breakdown calculations
+  const yearShifts = React.useMemo(() => {
+    return shifts.filter(s => s.date && s.date.startsWith(selectedYear));
+  }, [shifts, selectedYear]);
+
+  const yearUber = yearShifts.reduce((acc, curr) => acc + curr.uberEarnings, 0);
+  const year99 = yearShifts.reduce((acc, curr) => acc + curr.earnings99, 0);
+  const yearIndrive = yearShifts.reduce((acc, curr) => acc + curr.indriveEarnings, 0);
+  const yearPrivate = yearShifts.reduce((acc, curr) => acc + curr.privateEarnings, 0);
+  const yearOther = yearShifts.reduce((acc, curr) => acc + curr.otherEarnings, 0);
+  const yearGross = yearUber + year99 + yearIndrive + yearPrivate + yearOther;
+
+  const yearShiftFuel = yearShifts.reduce((acc, curr) => acc + curr.fuelExpense, 0);
+  const yearShiftFood = yearShifts.reduce((acc, curr) => acc + curr.foodExpense, 0);
+  const yearShiftOther = yearShifts.reduce((acc, curr) => acc + curr.otherExpenses, 0);
+  const yearDirectExpenses = yearShiftFuel + yearShiftFood + yearShiftOther;
+
+  const yearFixedExpenses = React.useMemo(() => {
+    return expenses.filter(e => e.date && e.date.startsWith(selectedYear)).reduce((acc, curr) => acc + curr.value, 0);
+  }, [expenses, selectedYear]);
+
+  const yearConsolidatedExpenses = yearDirectExpenses + yearFixedExpenses;
+  const yearNet = yearGross - yearConsolidatedExpenses;
+
+  // Chart datasets
+  const monthChartData = React.useMemo(() => {
+    return monthShifts
+      .slice()
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map(s => {
+        const gross = s.uberEarnings + s.earnings99 + s.indriveEarnings + s.privateEarnings + s.otherEarnings;
+        const costs = s.fuelExpense + s.foodExpense + s.otherExpenses;
+        const net = gross - costs;
+        return {
+          dia: s.date.substring(8, 10),
+          dataCompleta: new Date(s.date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
+          Faturamento: Number(gross.toFixed(2)),
+          Despesas: Number(costs.toFixed(2)),
+          Lucro: Number(net.toFixed(2))
+        };
+      });
+  }, [monthShifts]);
+
+  const annualChartData = React.useMemo(() => {
+    return Array.from({ length: 12 }, (_, i) => {
+      const monthNum = String(i + 1).padStart(2, '0');
+      const yearMonth = `${selectedYear}-${monthNum}`;
+      
+      const mShifts = shifts.filter(s => s.date && s.date.startsWith(yearMonth));
+      const mExpenses = expenses.filter(e => e.date && e.date.startsWith(yearMonth));
+      
+      const uber = mShifts.reduce((acc, curr) => acc + curr.uberEarnings, 0);
+      const m99 = mShifts.reduce((acc, curr) => acc + curr.earnings99, 0);
+      const indrive = mShifts.reduce((acc, curr) => acc + curr.indriveEarnings, 0);
+      const priv = mShifts.reduce((acc, curr) => acc + curr.privateEarnings, 0);
+      const other = mShifts.reduce((acc, curr) => acc + curr.otherEarnings, 0);
+      const gross = uber + m99 + indrive + priv + other;
+      
+      const fuel = mShifts.reduce((acc, curr) => acc + curr.fuelExpense, 0);
+      const food = mShifts.reduce((acc, curr) => acc + curr.foodExpense, 0);
+      const tagClean = mShifts.reduce((acc, curr) => acc + curr.otherExpenses, 0);
+      const extraCostsTotal = mExpenses.reduce((acc, curr) => acc + curr.value, 0);
+      const totalExpenses = fuel + food + tagClean + extraCostsTotal;
+      const netProfit = gross - totalExpenses;
+      
+      return {
+        monthNum,
+        name: new Date(Number(selectedYear), i, 15).toLocaleDateString('pt-BR', { month: 'short' }).toUpperCase(),
+        Faturamento: Number(gross.toFixed(0)),
+        Despesas: Number(totalExpenses.toFixed(0)),
+        Lucro: Number(netProfit.toFixed(0)),
+        hasData: mShifts.length > 0 || mExpenses.length > 0
+      };
+    }).filter(item => item.hasData);
+  }, [shifts, expenses, selectedYear]);
 
   // Global consolidated math (current month / all)
   const totalKm = shifts.reduce((acc, curr) => acc + curr.totalKm, 0);
@@ -197,42 +329,118 @@ export default function Dashboard({
 
       </div>
 
-      {/* 2. CORE FINANCIAL BALANCES HIGHLIGHTS */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+      {/* ANALYSIS FILTER BAR */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-2xl border border-slate-200 shadow-xs gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+            <Calendar className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-xs font-black text-slate-800 uppercase tracking-tight">Período de Análise</h3>
+            <p className="text-[10px] text-slate-500 font-semibold">Selecione para alterar faturamento bruto, despesas e rendimento líquido.</p>
+          </div>
+        </div>
         
-        {/* Gross Earnings */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4 hover:border-slate-300 transition-all">
-          <div className="p-3.5 rounded-xl bg-emerald-50 text-emerald-600">
-            <DollarSign className="w-6 h-6" />
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <span className="text-xs font-bold text-slate-500 whitespace-nowrap hidden sm:inline">Análise Temporal:</span>
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="w-full sm:w-auto bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-800 focus:outline-blue-600 cursor-pointer shadow-xs"
+          >
+            {monthsList.map(m => (
+              <option key={m} value={m}>
+                {formatMonthLabel(m)}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* 2. CORE FINANCIAL BALANCES HIGHLIGHTS (MONTH VS YEAR SPLIT GRID) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* MONTH SELECTED BLOCK */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+          <div className="flex justify-between items-center border-b border-slate-105 pb-3">
+            <span className="text-[11px] uppercase font-mono font-black text-blue-600 tracking-wider flex items-center gap-1.5">
+              <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+              Faturamento do Mês ({formatMonthLabel(selectedMonth).toUpperCase()})
+            </span>
+            <span className="text-[10px] text-slate-400 font-mono font-bold uppercase">{monthShifts.length} TRABALHOS</span>
           </div>
-          <div>
-            <span className="text-[10px] uppercase font-mono font-bold text-slate-400 tracking-wider">Faturamento Bruto</span>
-            <p className="text-2xl font-black text-slate-900 font-mono mt-0.5">R$ {totalGrossEarnings.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-            <p className="text-[9px] text-emerald-600 font-bold">Lançado por apps e corridas</p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            
+            {/* Monthly Gross */}
+            <div className="p-4 rounded-xl bg-emerald-50/40 border border-emerald-100/70 flex flex-col justify-between">
+              <div>
+                <span className="text-[9px] uppercase font-mono font-extrabold text-emerald-800/80 tracking-wider block">Receita Bruta</span>
+                <p className="text-lg font-black text-emerald-705 font-mono mt-1">R$ {monthGross.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <span className="text-[9px] text-emerald-600 font-medium mt-1 inline-block border-t border-emerald-100/40 pt-1">Ganhos em apps</span>
+            </div>
+
+            {/* Monthly Expenses */}
+            <div className="p-4 rounded-xl bg-red-50/40 border border-red-100/70 flex flex-col justify-between">
+              <div>
+                <span className="text-[9px] uppercase font-mono font-extrabold text-red-800/80 tracking-wider block">Custos Totais</span>
+                <p className="text-lg font-black text-red-655 font-mono mt-1">R$ {monthConsolidatedExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <span className="text-[9px] text-red-550 font-medium mt-1 inline-block border-t border-red-100/40 pt-1">Combustível/Extras</span>
+            </div>
+
+            {/* Monthly net margin */}
+            <div className="p-4 rounded-xl bg-blue-50/40 border border-blue-100/70 flex flex-col justify-between">
+              <div>
+                <span className="text-[9px] uppercase font-mono font-extrabold text-blue-800/80 tracking-wider block">Sobra Líquida</span>
+                <p className="text-lg font-black text-blue-655 font-mono mt-1">R$ {monthNet.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <span className="text-[9px] text-blue-600 font-semibold mt-1 inline-block border-t border-blue-100/40 pt-1 font-mono">Margem Real: {monthGross > 0 ? ((monthNet / monthGross) * 100).toFixed(0) : 0}%</span>
+            </div>
+
           </div>
         </div>
 
-        {/* Consolidated Expenses */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-205 shadow-xs flex items-center gap-4 hover:border-slate-300 transition-all">
-          <div className="p-3.5 rounded-xl bg-red-50 text-red-600">
-            <TrendingUp className="w-6 h-6 text-red-500" />
+        {/* YEAR SELECTED ACUMULADO */}
+        <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl text-white shadow-xs space-y-4">
+          <div className="flex justify-between items-center border-b border-slate-850 pb-3">
+            <span className="text-[11px] uppercase font-mono font-black text-emerald-400 tracking-wider flex items-center gap-1.5">
+              <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
+              Acumulado do Ano ({selectedYear})
+            </span>
+            <span className="text-[10px] text-slate-500 font-mono font-bold uppercase">{yearShifts.length} TRABALHOS</span>
           </div>
-          <div>
-            <span className="text-[10px] uppercase font-mono font-bold text-slate-400 tracking-wider">Despesas Operacionais</span>
-            <p className="text-2xl font-black text-slate-900 font-mono mt-0.5">R$ {totalConsolidatedExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-            <p className="text-[9px] text-red-550 font-bold">Combustível + custos fixos do carro</p>
-          </div>
-        </div>
 
-        {/* Net Profit */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4 hover:border-slate-300 transition-all">
-          <div className="p-3.5 rounded-xl bg-blue-50 text-blue-600">
-            <Sparkles className="w-6 h-6 text-blue-500" />
-          </div>
-          <div>
-            <span className="text-[10px] uppercase font-mono font-bold text-slate-400 tracking-wider">Rendimento Líquido (Real Pocket)</span>
-            <p className="text-2xl font-black text-slate-900 font-mono mt-0.5">R$ {netProfit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-            <p className="text-[9px] text-blue-600 font-bold">Sua sobra real após amortizações</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            
+            {/* Annual Gross */}
+            <div className="p-4 rounded-xl bg-slate-850 border border-slate-800/70 flex flex-col justify-between">
+              <div>
+                <span className="text-[9px] uppercase font-mono font-extrabold text-slate-400 tracking-wider block">Receita Bruta</span>
+                <p className="text-lg font-black text-emerald-400 font-mono mt-1">R$ {yearGross.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <span className="text-[9px] text-slate-500 font-bold mt-1 inline-block border-t border-slate-800/40 pt-1">Soma de todos meses</span>
+            </div>
+
+            {/* Annual Expenses */}
+            <div className="p-4 rounded-xl bg-slate-850 border border-slate-800/70 flex flex-col justify-between">
+              <div>
+                <span className="text-[9px] uppercase font-mono font-extrabold text-slate-400 tracking-wider block">Custos Totais</span>
+                <p className="text-lg font-black text-red-400 font-mono mt-1">R$ {yearConsolidatedExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <span className="text-[9px] text-slate-500 font-bold mt-1 inline-block border-t border-slate-800/40 pt-1">Débitos operacionais</span>
+            </div>
+
+            {/* Annual Net */}
+            <div className="p-4 rounded-xl bg-slate-850 border border-slate-800/70 flex flex-col justify-between">
+              <div>
+                <span className="text-[9px] uppercase font-mono font-extrabold text-slate-400 tracking-wider block">Sobra Líquida</span>
+                <p className="text-lg font-black text-blue-400 font-mono mt-1">R$ {yearNet.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <span className="text-[9px] text-slate-500 font-bold mt-1 inline-block border-t border-slate-800/40 pt-1 font-mono">Margem Anual: {yearGross > 0 ? ((yearNet / yearGross) * 100).toFixed(0) : 0}%</span>
+            </div>
+
           </div>
         </div>
 
@@ -302,42 +510,103 @@ export default function Dashboard({
           </div>
 
           <button 
-            onClick={() => onNavigate(' os')} // Navigate to goals simulators
+            onClick={() => onNavigate('goals')} // Navigate to goals simulators
             className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-bold tracking-wider uppercase rounded-xl transition cursor-pointer"
           >
             Ajustar Metas & Simulação
           </button>
         </div>
 
-        {/* TIME GRAPH LINE BALANÇO */}
-        <div className="lg:col-span-2 bg-white p-5 rounded-2xl border border-slate-205 shadow-xs space-y-2">
-          <span className="text-[10px] uppercase font-mono font-black text-slate-400 tracking-wider block">Balanço das Últimas 6 Jornadas (Evolução)</span>
+        {/* TIME GRAPH LINE BALANÇO (DYNAMIC DUAL CHART CONTAINER) */}
+        <div className="lg:col-span-2 bg-white p-5 rounded-2xl border border-slate-205 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+            <div>
+              <span className="text-[9px] uppercase font-mono font-black text-slate-400 tracking-wider block">Visualização Gráfica do Desempenho</span>
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">
+                {chartTab === 'month' ? `Detalhamento Diário: ${formatMonthLabel(selectedMonth)}` : `Evolução Mensal do Ano: ${selectedYear}`}
+              </h3>
+            </div>
+            
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+              <button
+                onClick={() => setChartTab('month')}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-all duration-150 cursor-pointer ${
+                  chartTab === 'month' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Gráfico do Mês
+              </button>
+              <button
+                onClick={() => setChartTab('year')}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-all duration-150 cursor-pointer ${
+                  chartTab === 'year' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Gráfico do Ano
+              </button>
+            </div>
+          </div>
           
-          <div className="h-56 w-full pt-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={timelineChartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorBruto" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.15}/>
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="colorLucro" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.15}/>
-                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="dia" tick={{ fontSize: 10, fill: '#64748b', fontWeight: 'bold' }} stroke="#cbd5e1" />
-                <YAxis tick={{ fontSize: 10, fill: '#64748b' }} stroke="#cbd5e1" />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: 8, color: '#fff', fontSize: 11 }}
-                  labelStyle={{ fontWeight: 'bold', color: '#38bdf8' }}
-                />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: 10, fontWeight: 'bold' }} />
-                <Area type="monotone" dataKey="Bruto" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorBruto)" />
-                <Area type="monotone" dataKey="Lucro" stroke="#2563eb" strokeWidth={2.5} fillOpacity={1} fill="url(#colorLucro)" name="Lucro Líq." />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="h-56 w-full pt-2">
+            {chartTab === 'month' ? (
+              monthChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={monthChartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorMonthBruto" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.15}/>
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorMonthLucro" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#2563eb" stopOpacity={0.15}/>
+                        <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="dia" tick={{ fontSize: 9, fill: '#64748b', fontWeight: 'bold' }} stroke="#cbd5e1" />
+                    <YAxis tick={{ fontSize: 9, fill: '#64748b' }} stroke="#cbd5e1" />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: 8, color: '#fff', fontSize: 11 }}
+                      labelStyle={{ fontWeight: 'bold', color: '#38bdf8' }}
+                      formatter={(val: number) => [`R$ ${val.toFixed(2)}`]}
+                    />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: 10, fontWeight: 'bold' }} />
+                    <Area type="monotone" dataKey="Faturamento" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorMonthBruto)" name="Receita Bruta" />
+                    <Area type="monotone" dataKey="Despesas" stroke="#ef4444" strokeWidth={1.5} fillOpacity={0} name="Despesas" />
+                    <Area type="monotone" dataKey="Lucro" stroke="#2563eb" strokeWidth={2.5} fillOpacity={1} fill="url(#colorMonthLucro)" name="Lucro Líquido" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 text-xs gap-1 py-10 border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                  <p className="font-extrabold text-slate-600">Nenhum turno registrado</p>
+                  <p className="text-[10px] text-slate-400">Não há jornadas de direção salvas neste mês.</p>
+                </div>
+              )
+            ) : (
+              annualChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={annualChartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#64748b', fontWeight: 'bold' }} stroke="#cbd5e1" />
+                    <YAxis tick={{ fontSize: 9, fill: '#64748b' }} stroke="#cbd5e1" />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: 8, color: '#fff', fontSize: 11 }}
+                      labelStyle={{ fontWeight: 'bold', color: '#cbd5e1' }}
+                      formatter={(val: number) => [`R$ ${val.toLocaleString('pt-BR')}`]}
+                    />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: 10, fontWeight: 'bold' }} />
+                    <Bar dataKey="Faturamento" fill="#10b981" radius={[3, 3, 0, 0]} name="Faturamento Bruto" />
+                    <Bar dataKey="Despesas" fill="#ef4444" radius={[3, 3, 0, 0]} name="Despesas Totais" />
+                    <Bar dataKey="Lucro" fill="#2563eb" radius={[3, 3, 0, 0]} name="Rendimento Líquido" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 text-xs gap-1 py-10 border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                  <p className="font-extrabold text-slate-600">Nenhum registro para o ano {selectedYear}</p>
+                  <p className="text-[10px] text-slate-400">Sem faturamentos ou despesas cadastrados neste ano.</p>
+                </div>
+              )
+            )}
           </div>
         </div>
 
