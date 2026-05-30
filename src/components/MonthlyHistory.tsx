@@ -188,6 +188,48 @@ export default function MonthlyHistory({ shifts, expenses, vehicle, profile }: M
     return list.filter(item => item.value > 0);
   }, [activeStats]);
 
+  // Group shifts and expenses of selected month by week
+  const selectedMonthWeeklyData = React.useMemo(() => {
+    if (!selectedMonth) return [];
+    
+    const weeks = [
+      { name: 'Semana 1 (01-07)', start: 1, end: 7, gross: 0, expenses: 0, net: 0 },
+      { name: 'Semana 2 (08-14)', start: 8, end: 14, gross: 0, expenses: 0, net: 0 },
+      { name: 'Semana 3 (15-21)', start: 15, end: 21, gross: 0, expenses: 0, net: 0 },
+      { name: 'Semana 4 (22-28)', start: 22, end: 28, gross: 0, expenses: 0, net: 0 },
+      { name: 'Semana 5 (29-31)', start: 29, end: 31, gross: 0, expenses: 0, net: 0 }
+    ];
+
+    const monthShifts = shifts.filter(s => s.date && s.date.startsWith(selectedMonth));
+    const monthExpenses = expenses.filter(e => e.date && e.date.startsWith(selectedMonth));
+
+    monthShifts.forEach(s => {
+      const day = s.date ? parseInt(s.date.split('-')[2], 10) : 0;
+      const shiftGross = s.uberEarnings + s.earnings99 + s.indriveEarnings + s.privateEarnings + s.otherEarnings;
+      const shiftCost = s.fuelExpense + s.foodExpense + s.otherExpenses;
+
+      const w = weeks.find(wk => day >= wk.start && day <= wk.end);
+      if (w) {
+        w.gross += shiftGross;
+        w.expenses += shiftCost;
+      }
+    });
+
+    monthExpenses.forEach(e => {
+      const day = e.date ? parseInt(e.date.split('-')[2], 10) : 0;
+      const w = weeks.find(wk => day >= wk.start && day <= wk.end);
+      if (w) {
+        w.expenses += e.value;
+      }
+    });
+
+    weeks.forEach(w => {
+      w.net = w.gross - w.expenses;
+    });
+
+    return weeks;
+  }, [selectedMonth, shifts, expenses]);
+
   // Export active month data to CSV natively
   const exportToCSV = () => {
     if (!activeStats || !selectedMonth) return;
@@ -613,6 +655,97 @@ export default function MonthlyHistory({ shifts, expenses, vehicle, profile }: M
                 <span className="text-slate-450 uppercase text-[9px] font-extrabold block">Lucro Real / Hora</span>
                 <p className="text-base font-black text-slate-800 mt-0.5">R$ {activeStats.earningsPerHour.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/h</p>
                 <p className="text-[10px] text-emerald-700 font-bold">R$ {activeStats.netEarningsPerHour.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} líq/h</p>
+              </div>
+            </div>
+          </div>
+
+          {/* DESEMPENHO SEMANAL DO MÊS */}
+          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4 text-left">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div>
+                <span className="text-[10px] uppercase font-mono font-black text-blue-600 tracking-wider block">Análise Temporal</span>
+                <h4 className="text-sm font-black text-slate-950 uppercase tracking-tight">Ganhos e Despesas por Semana do Mês</h4>
+              </div>
+              <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-[9px] font-mono font-bold uppercase">Consolidação por Período</span>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Graphic container */}
+              <div className="lg:col-span-1 h-52 w-full pt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={selectedMonthWeeklyData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#64748b', fontWeight: 'bold' }} stroke="#cbd5e1" tickFormatter={(v) => v.split(' ')[0] + ' ' + v.split(' ')[1]} />
+                    <YAxis tick={{ fontSize: 9, fill: '#64748b' }} stroke="#cbd5e1" />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: 8, color: '#fff', fontSize: 10 }}
+                      formatter={(v: number) => `R$ ${v.toFixed(2)}`}
+                    />
+                    <Bar dataKey="gross" fill="#10b981" radius={[3, 3, 0, 0]} name="Bruto" />
+                    <Bar dataKey="expenses" fill="#ef4444" radius={[3, 3, 0, 0]} name="Gasto" />
+                    <Bar dataKey="net" fill="#2563eb" radius={[3, 3, 0, 0]} name="Líquido" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Table / Details */}
+              <div className="lg:col-span-2 space-y-2">
+                <div className="hidden sm:grid grid-cols-4 text-[9px] uppercase font-mono font-black text-slate-400 px-3 pb-1 border-b border-slate-100">
+                  <span>Semana do Mês</span>
+                  <span className="text-right">Faturamento Bruto</span>
+                  <span className="text-right">Despesas Totais</span>
+                  <span className="text-right">Sobra Líquida</span>
+                </div>
+
+                <div className="space-y-1.5">
+                  {selectedMonthWeeklyData.map((wk, idx) => {
+                    const retentionRate = wk.gross > 0 ? (wk.net / wk.gross) * 100 : 0;
+                    return (
+                      <div key={idx} className="flex flex-col sm:grid sm:grid-cols-4 bg-slate-50 border border-slate-150 p-3 rounded-xl hover:bg-slate-100/60 transition text-xs font-semibold gap-1.5 sm:gap-0 items-stretch sm:items-center">
+                        <div className="flex justify-between sm:block">
+                          <span className="text-slate-800 font-extrabold">{wk.name}</span>
+                          <span className="sm:hidden text-[9px] font-mono px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-md font-bold uppercase">
+                            Retenção: {retentionRate.toFixed(0)}%
+                          </span>
+                        </div>
+
+                        <div className="flex justify-between sm:block text-right">
+                          <span className="sm:hidden text-slate-400 font-normal">Bruto:</span>
+                          <span className="font-mono text-emerald-700 font-black">R$ {wk.gross.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+
+                        <div className="flex justify-between sm:block text-right">
+                          <span className="sm:hidden text-slate-400 font-normal font-sans">Despesas:</span>
+                          <span className="font-mono text-red-650 font-black">R$ {wk.expenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+
+                        <div className="flex justify-between sm:block text-right">
+                          <span className="sm:hidden text-slate-400 font-normal font-sans">Líquido:</span>
+                          <span className={`font-mono font-black ${wk.net >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                            R$ {wk.net.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+
+                        <div className="hidden sm:block col-span-4 mt-2">
+                          <div className="flex justify-between items-center text-[9px] text-slate-400 mb-1">
+                            <span>Percentual de Sobra Líquida Retida:</span>
+                            <span className={`font-bold ${retentionRate >= 40 ? 'text-emerald-600' : retentionRate > 0 ? 'text-yellow-600' : 'text-red-600'}`}>
+                              {retentionRate.toFixed(1)}% do faturado
+                            </span>
+                          </div>
+                          <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden border border-slate-300">
+                            <div 
+                              className={`h-full rounded-full transition-all ${
+                                retentionRate >= 40 ? 'bg-emerald-500' : retentionRate > 0 ? 'bg-yellow-500' : 'bg-red-500'
+                              }`} 
+                              style={{ width: `${Math.max(0, Math.min(100, retentionRate))}%` }} 
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>

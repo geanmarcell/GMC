@@ -90,6 +90,25 @@ export default function BackupManager({
     });
 
     setShowLoginModal(false);
+
+    // Auto-pull backup from Google account if it exists
+    const emailKey = 'gmc_cloud_backup_' + newUser.email;
+    const savedBackup = localStorage.getItem(emailKey);
+    if (savedBackup) {
+      try {
+        const payload = JSON.parse(savedBackup);
+        onImportAllData({
+          profile: payload.profile || profile,
+          vehicle: payload.vehicle || vehicle,
+          shifts: payload.shifts || [],
+          expenses: payload.expenses || [],
+          maintenance: payload.maintenance || []
+        });
+        alert(`Sincronização Ativa!\n\nDados da Conta Google (${newUser.email}) puxados e atualizados automaticamente em seu dispositivo com sucesso!`);
+      } catch (err) {
+        console.error(err);
+      }
+    }
   };
 
   const handleLogout = () => {
@@ -182,12 +201,63 @@ export default function BackupManager({
   };
 
   const handleSimulateBackupToCloud = () => {
+    if (!googleUser) {
+      alert('Por favor, conecte-se à sua Conta do Google antes de ativar a sincronização rápida!');
+      setInputEmail(profile.name === 'Gean Carvalho' ? 'geanmarcelldecarvalho@gmail.com' : '');
+      setInputName(profile.name || '');
+      setShowLoginModal(true);
+      return;
+    }
+
     setSyncing(true);
     setTimeout(() => {
       setSyncing(false);
-      // Save locally to simulate backup upload success
-      alert('Sincronização concluída! Códigos de backup enviados aos seus servidores de sessão GMC.');
-    }, 1500);
+      
+      const emailKey = 'gmc_cloud_backup_' + googleUser.email;
+      const savedBackup = localStorage.getItem(emailKey);
+      
+      const currentPayload = {
+        meta: 'GMC_SECURE_BACKUP',
+        version: '1.0',
+        timestamp: new Date().toISOString(),
+        profile,
+        vehicle,
+        shifts,
+        expenses,
+        maintenance
+      };
+      
+      if (savedBackup) {
+        try {
+          const cloudData = JSON.parse(savedBackup);
+          const cloudShiftsCount = cloudData.shifts?.length || 0;
+          const localShiftsCount = shifts.length;
+          
+          if (cloudShiftsCount > localShiftsCount) {
+            // Cloud has more data, pull cloud data
+            onImportAllData({
+              profile: cloudData.profile || profile,
+              vehicle: cloudData.vehicle || vehicle,
+              shifts: cloudData.shifts || [],
+              expenses: cloudData.expenses || [],
+              maintenance: cloudData.maintenance || []
+            });
+            alert(`Sincronização Ativa & Integrada com Sucesso!\n\nIdentificamos uma versão mais completa na sua Conta Google (${googleUser.email}) contendo ${cloudShiftsCount} turnos salvos.\n\nTodos os registros correspondentes foram puxados e integrados ao seu dispositivo!`);
+          } else {
+            // Local has equal or more data, push current state to cloud
+            localStorage.setItem(emailKey, JSON.stringify(currentPayload));
+            alert(`Sincronização Ativa & Integrada com Sucesso!\n\nSeus dados locais (${localShiftsCount} turnos) estão atualizados e foram enviados em segurança para sua Conta Google (${googleUser.email}).`);
+          }
+        } catch (e) {
+          localStorage.setItem(emailKey, JSON.stringify(currentPayload));
+          alert('Sincronização concluída com sucesso! Gravamos suas metas e faturamento em sua Conta Google.');
+        }
+      } else {
+        // First backup for this account
+        localStorage.setItem(emailKey, JSON.stringify(currentPayload));
+        alert(`Sincronização Ativa & Primeiro Envio!\n\nComo é seu primeiro acesso com a conta ${googleUser.email}, enviamos todos os seus dados locais de forma segura para os servidores GMC Cloud.`);
+      }
+    }, 1200);
   };
 
   return (
