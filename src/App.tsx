@@ -18,7 +18,8 @@ import {
   Wrench,
   FileText,
   BarChart2,
-  Cloud
+  Cloud,
+  Sliders
 } from 'lucide-react';
 import { Shift, Expense, Vehicle, DriverProfile, Maintenance } from './types';
 import { 
@@ -38,6 +39,7 @@ import GoalsManager from './components/GoalsManager';
 import ClosedReport from './components/ClosedReport';
 import MonthlyHistory from './components/MonthlyHistory';
 import BackupManager from './components/BackupManager';
+import ToolsManager from './components/ToolsManager';
 
 export default function App() {
   // Navigation State
@@ -92,44 +94,148 @@ export default function App() {
     localStorage.setItem('gmc_driver_maintenance', JSON.stringify(maintenanceLog));
   }, [maintenanceLog]);
 
+  // Auto-Pull on initial load if logged in with Google Account
+  useEffect(() => {
+    const savedGoogleUser = localStorage.getItem('cpma_google_user');
+    if (savedGoogleUser) {
+      try {
+        const parsedUser = JSON.parse(savedGoogleUser);
+        if (parsedUser && parsedUser.email) {
+          fetch(`/api/backup/load/${encodeURIComponent(parsedUser.email)}`)
+            .then(res => res.json())
+            .then(data => {
+              if (data.success && data.backup) {
+                const cloudBackup = data.backup;
+                if (cloudBackup.shifts || cloudBackup.expenses) {
+                  setProfile(cloudBackup.profile);
+                  setVehicle(cloudBackup.vehicle);
+                  setShifts(cloudBackup.shifts || []);
+                  setExpenses(cloudBackup.expenses || []);
+                  setMaintenanceLog(cloudBackup.maintenance || []);
+                  console.log("GMC Auto-Sincronização: Seus dados foram carregados diretamente da nuvem GMC com sucesso para o e-mail: " + parsedUser.email);
+                }
+              }
+            })
+            .catch(err => {
+              console.error("Erro no auto-pull no carregamento inicial:", err);
+            });
+        }
+      } catch (err) {
+        console.error("Erro parsing google user on mount:", err);
+      }
+    }
+  }, []);
+
+  // Helper to trigger automated server-side backup on modification
+  const triggerAutoBackup = (
+    p: DriverProfile,
+    v: Vehicle,
+    s: Shift[],
+    e: Expense[],
+    m: Maintenance[]
+  ) => {
+    const savedGoogleUser = localStorage.getItem('cpma_google_user');
+    if (!savedGoogleUser) return;
+    try {
+      const parsedUser = JSON.parse(savedGoogleUser);
+      if (parsedUser && parsedUser.email) {
+        const payload = {
+          meta: 'GMC_SECURE_BACKUP',
+          version: '1.0',
+          timestamp: new Date().toISOString(),
+          profile: p,
+          vehicle: v,
+          shifts: s,
+          expenses: e,
+          maintenance: m
+        };
+        fetch('/api/backup/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: parsedUser.email, backup: payload })
+        })
+        .then(res => res.json())
+        .then(res => {
+          if (res.success) {
+            console.log("GMC Nuvem: backup de segurança automática guardado com sucesso.");
+          }
+        })
+        .catch(err => console.error("Erro no auto-backup em background:", err));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   // Handler Actions
   const handleAddShift = (newShift: Shift) => {
-    setShifts(prev => [...prev, newShift]);
+    setShifts(prev => {
+      const updated = [...prev, newShift];
+      triggerAutoBackup(profile, vehicle, updated, expenses, maintenanceLog);
+      return updated;
+    });
   };
 
   const handleUpdateShift = (updatedShift: Shift) => {
-    setShifts(prev => prev.map(s => s.id === updatedShift.id ? updatedShift : s));
+    setShifts(prev => {
+      const updated = prev.map(s => s.id === updatedShift.id ? updatedShift : s);
+      triggerAutoBackup(profile, vehicle, updated, expenses, maintenanceLog);
+      return updated;
+    });
   };
 
   const handleDeleteShift = (id: string) => {
-    setShifts(prev => prev.filter(s => s.id !== id));
+    setShifts(prev => {
+      const updated = prev.filter(s => s.id !== id);
+      triggerAutoBackup(profile, vehicle, updated, expenses, maintenanceLog);
+      return updated;
+    });
   };
 
   const handleAddExpense = (newExp: Expense) => {
-    setExpenses(prev => [...prev, newExp]);
+    setExpenses(prev => {
+      const updated = [...prev, newExp];
+      triggerAutoBackup(profile, vehicle, shifts, updated, maintenanceLog);
+      return updated;
+    });
   };
 
   const handleDeleteExpense = (id: string) => {
-    setExpenses(prev => prev.filter(e => e.id !== id));
+    setExpenses(prev => {
+      const updated = prev.filter(e => e.id !== id);
+      triggerAutoBackup(profile, vehicle, shifts, updated, maintenanceLog);
+      return updated;
+    });
   };
 
   const handleUpdateVehicle = (updatedVeh: Vehicle) => {
     setVehicle(updatedVeh);
+    triggerAutoBackup(profile, updatedVeh, shifts, expenses, maintenanceLog);
   };
 
   const handleAddMaintenance = (newMaint: Maintenance) => {
-    setMaintenanceLog(prev => [...prev, newMaint]);
+    setMaintenanceLog(prev => {
+      const updated = [...prev, newMaint];
+      triggerAutoBackup(profile, vehicle, shifts, expenses, updated);
+      return updated;
+    });
   };
 
   const handleDeleteMaintenance = (id: string) => {
-    setMaintenanceLog(prev => prev.filter(m => m.id !== id));
+    setMaintenanceLog(prev => {
+      const updated = prev.filter(m => m.id !== id);
+      triggerAutoBackup(profile, vehicle, shifts, expenses, updated);
+      return updated;
+    });
   };
 
   const handleUpdateProfile = (updatedProf: DriverProfile, updatedVehicle?: Vehicle) => {
     setProfile(updatedProf);
+    const targetVeh = updatedVehicle || vehicle;
     if (updatedVehicle) {
       setVehicle(updatedVehicle);
     }
+    triggerAutoBackup(updatedProf, targetVeh, shifts, expenses, maintenanceLog);
   };
 
   // Import State from Backup Codes
@@ -267,6 +373,18 @@ export default function App() {
             <Cloud className={`w-4 h-4 shrink-0 ${activeTab === 'sync' ? 'text-white' : 'text-blue-500'}`} />
             <span>Sincronização & Backup</span>
           </button>
+
+          <button
+            onClick={() => handleNavigate('tools')}
+            className={`w-full text-left flex items-center gap-3 p-3 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'tools' 
+                ? 'bg-blue-600 text-white font-bold shadow-md' 
+                : 'hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <Sliders className={`w-4 h-4 shrink-0 ${activeTab === 'tools' ? 'text-white' : 'text-blue-500'}`} />
+            <span>Simuladores & Comparativos</span>
+          </button>
         </nav>
 
         {/* Driver identity footer widget */}
@@ -356,6 +474,13 @@ export default function App() {
                <Cloud className="w-4 h-4 text-blue-500" />
                <span>Sincronização & Backup</span>
              </button>
+             <button
+               onClick={() => handleNavigate('tools')}
+               className={`w-full text-left py-2.5 px-3 rounded-xl flex items-center gap-2.5 ${activeTab === 'tools' ? 'bg-blue-600 text-white font-bold' : 'hover:bg-slate-800'}`}
+             >
+               <Sliders className="w-4 h-4 text-blue-500" />
+               <span>Simuladores & Comparativos</span>
+             </button>
           </div>
         )}
       </header>
@@ -377,6 +502,7 @@ export default function App() {
                   {activeTab === 'goals' && 'Planejador de Faturamento'}
                   {activeTab === 'history' && 'Histórico de Faturamento Mensal'}
                   {activeTab === 'sync' && 'Central de Backup & Sincronização'}
+                  {activeTab === 'tools' && 'Ferramentas de Simulação & Eficiência'}
                 </h2>
                 <p className="text-xs text-slate-500 font-medium.">
                   {activeTab === 'dashboard' && 'Visão consolidada de lucros, faturamento das plataformas (Uber/99), despesas e alertas de óleo.'}
@@ -386,6 +512,7 @@ export default function App() {
                   {activeTab === 'goals' && 'Configure metas diárias e mensais ou brinque com o simulador financeiro de jornada sugerida.'}
                   {activeTab === 'history' && 'Evolução cronológica de faturamento, gráficos de lucratividade real e listagem consolidada de custos.'}
                   {activeTab === 'sync' && 'Conecte sua Conta do Google para assinatura eletrônica e compartilhe dados com notebooks e celulares.'}
+                  {activeTab === 'tools' && 'Faça o simulador de corridas particulares ou confira quais plataformas (Uber, 99, InDrive ou Particular) são mais rentáveis para você.'}
                 </p>
               </div>
               <div className="flex items-center gap-1.5 text-[9px] text-slate-500 font-bold uppercase tracking-wider font-mono bg-slate-100 px-3 py-2 rounded-lg border border-slate-200">
@@ -473,6 +600,14 @@ export default function App() {
                   maintenance={maintenanceLog}
                   onImportAllData={handleImportAllData}
                   onUpdateProfile={handleUpdateProfile}
+                />
+              )}
+
+              {activeTab === 'tools' && (
+                <ToolsManager 
+                  shifts={shifts}
+                  vehicle={vehicle}
+                  profile={profile}
                 />
               )}
             </div>

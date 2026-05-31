@@ -14,7 +14,9 @@ export const DEFAULT_VEHICLE: Vehicle = {
   avgConsumption: 12.5, // Km/m³ GNV ou Km/L gasolina
   currentOdometer: 64200,
   oilChangeInterval: 10000, // Troca a cada 10.000 Km
-  lastOilChangeOdometer: 55000 // Próxima troca com 65.000 Km (está quase no limite!)
+  lastOilChangeOdometer: 55000, // Próxima troca com 65.000 Km (está quase no limite!)
+  fipeValue: 58000, // R$ 58.000 Tabela FIPE
+  depreciationPerKm: 0.22 // R$ 0,22 centavos de depreciação por KM rodado
 };
 
 export const DEFAULT_PROFILE: DriverProfile = {

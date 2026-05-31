@@ -15,6 +15,8 @@ export interface Vehicle {
   currentOdometer: number; // Km atual do veículo
   oilChangeInterval: number; // Intervalo para troca de óleo (ex: 10000 km)
   lastOilChangeOdometer: number; // KM da última troca de óleo
+  fipeValue?: number; // Valor Tabela FIPE (ex: R$ 55000)
+  depreciationPerKm?: number; // Depreciação real por KM em R$ (ex: R$ 0.22)
 }
 
 export interface DriverProfile {

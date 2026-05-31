@@ -375,11 +375,11 @@ export default function ShiftsManager({
 
       {/* 4. MODAL DRAWER FOR ADD / EDIT */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto no-print">
-          <div className="bg-white rounded-2xl border border-slate-200 w-full max-w-2xl shadow-xl overflow-hidden block">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50 overflow-y-auto no-print">
+          <div className="bg-white rounded-2xl border border-slate-200 w-full max-w-2xl shadow-xl overflow-hidden flex flex-col my-auto max-h-[96vh] sm:max-h-[92vh]">
             
             {/* Header */}
-            <div className="px-6 py-4 bg-slate-900 text-white flex justify-between items-center">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-slate-900 text-white flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-blue-500" />
                 <h4 className="text-xs font-bold uppercase tracking-wider">
@@ -388,16 +388,16 @@ export default function ShiftsManager({
               </div>
               <button 
                 onClick={() => setShowAddModal(false)}
-                className="text-slate-400 hover:text-white font-extrabold text-sm uppercase cursor-pointer"
+                className="text-slate-400 hover:text-white font-extrabold text-[10px] sm:text-xs uppercase cursor-pointer"
               >
                 fechar X
               </button>
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="p-6 text-xs space-y-5">
+            <form onSubmit={handleSubmit} className="p-4 sm:p-6 text-xs space-y-4 sm:space-y-5 overflow-y-auto flex-1">
               
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 {/* Date */}
                 <div>
                   <label className="text-slate-600 font-bold block mb-1">Data da Jornada</label>
@@ -406,7 +406,7 @@ export default function ShiftsManager({
                     required
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 text-slate-700 font-semibold rounded-xl focus:outline-blue-600 font-mono"
+                    className="w-full p-2 sm:p-2.5 bg-slate-50 border border-slate-200 text-slate-700 font-semibold rounded-xl focus:outline-blue-600 font-mono"
                   />
                 </div>
                 {/* Worked Hours */}
@@ -420,7 +420,7 @@ export default function ShiftsManager({
                     max="24"
                     value={hoursWorked}
                     onChange={(e) => setHoursWorked(Number(e.target.value))}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 text-slate-705 text-slate-700 font-semibold rounded-xl focus:outline-blue-600 font-mono"
+                    className="w-full p-2 sm:p-2.5 bg-slate-50 border border-slate-200 text-slate-705 text-slate-700 font-semibold rounded-xl focus:outline-blue-600 font-mono"
                   />
                 </div>
                 {/* Start Odometer */}
@@ -432,12 +432,12 @@ export default function ShiftsManager({
                     min="0"
                     value={startOdometer}
                     onChange={(e) => setStartOdometer(Number(e.target.value))}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 text-slate-700 font-semibold rounded-xl focus:outline-blue-600 font-mono font-bold"
+                    className="w-full p-2 sm:p-2.5 bg-slate-50 border border-slate-200 text-slate-700 font-semibold rounded-xl focus:outline-blue-600 font-mono font-bold"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-slate-100 pt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 border-t border-slate-100 pt-4">
                 {/* End Odometer */}
                 <div>
                   <label className="text-slate-600 font-bold block mb-1">Odomêtro Final (KM)</label>
@@ -447,11 +447,11 @@ export default function ShiftsManager({
                     min={startOdometer}
                     value={endOdometer}
                     onChange={(e) => setEndOdometer(Number(e.target.value))}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 text-slate-700 font-semibold rounded-xl focus:outline-blue-600 font-mono font-bold"
+                    className="w-full p-2 sm:p-2.5 bg-slate-50 border border-slate-200 text-slate-700 font-semibold rounded-xl focus:outline-blue-600 font-mono font-bold"
                   />
                   <p className="text-[9px] text-slate-400 mt-1">KM parcial total: {endOdometer >= startOdometer ? endOdometer - startOdometer : 0} KM</p>
                 </div>
-                <div colSpan={2} className="col-span-1 sm:col-span-2 p-3.5 bg-blue-50 border border-blue-100 rounded-xl flex items-center gap-2">
+                <div className="col-span-1 sm:col-span-2 p-3.5 bg-blue-50 border border-blue-100 rounded-xl flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5 text-blue-600 shrink-0" />
                   <p className="text-[10px] text-blue-800 leading-snug font-medium">
                     Se este for o maior odômetro lançado até hoje, o odômetro consolidado do veículo herdará automaticamente o valor para facilitar as próximas vistorias!
