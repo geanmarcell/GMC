@@ -32,6 +32,7 @@ interface BackupManagerProps {
     shifts: Shift[];
     expenses: Expense[];
     maintenance: Maintenance[];
+    timestamp?: string;
   }) => void;
   onUpdateProfile: (p: DriverProfile) => void;
 }
@@ -101,7 +102,8 @@ export default function BackupManager({
             vehicle: data.backup.vehicle || vehicle,
             shifts: data.backup.shifts || [],
             expenses: data.backup.expenses || [],
-            maintenance: data.backup.maintenance || []
+            maintenance: data.backup.maintenance || [],
+            timestamp: data.backup.timestamp || data.updatedAt
           });
           alert(`Sincronização Ativa!\n\nDados da Conta Google (${newUser.email}) carregados diretamente do Servidor GMC Cloud e sincronizados em seu aparelho com sucesso!`);
         } else {
@@ -116,7 +118,8 @@ export default function BackupManager({
                 vehicle: payload.vehicle || vehicle,
                 shifts: payload.shifts || [],
                 expenses: payload.expenses || [],
-                maintenance: payload.maintenance || []
+                maintenance: payload.maintenance || [],
+                timestamp: payload.timestamp
               });
               alert(`Sincronização Ativa!\n\nDados locais da Conta Google (${newUser.email}) restaurados com sucesso!`);
             } catch (err) {
@@ -137,7 +140,8 @@ export default function BackupManager({
               vehicle: payload.vehicle || vehicle,
               shifts: payload.shifts || [],
               expenses: payload.expenses || [],
-              maintenance: payload.maintenance || []
+              maintenance: payload.maintenance || [],
+              timestamp: payload.timestamp
             });
           } catch (e) {
             console.error(e);
@@ -213,7 +217,8 @@ export default function BackupManager({
         vehicle: payload.vehicle,
         shifts: payload.shifts || [],
         expenses: payload.expenses || [],
-        maintenance: payload.maintenance || []
+        maintenance: payload.maintenance || [],
+        timestamp: payload.timestamp
       });
 
       setImportCode('');
@@ -246,6 +251,10 @@ export default function BackupManager({
 
     setSyncing(true);
     
+    // Check when this device was last modified
+    const localLastModifiedStr = localStorage.getItem('gmc_last_modified');
+    const localLastModified = localLastModifiedStr ? new Date(localLastModifiedStr).getTime() : 0;
+
     const currentPayload = {
       meta: 'GMC_SECURE_BACKUP',
       version: '1.0',
@@ -264,31 +273,32 @@ export default function BackupManager({
         let shouldUpload = true;
         
         if (data.success && data.backup) {
-          const cloudShiftsCount = data.backup.shifts?.length || 0;
-          const localShiftsCount = shifts.length;
+          const cloudTimestampStr = data.backup.timestamp || data.updatedAt;
+          const cloudLastModified = cloudTimestampStr ? new Date(cloudTimestampStr).getTime() : 0;
 
-          if (cloudShiftsCount > localShiftsCount) {
-            // Server has more complete data, pull the server state
+          // If the cloud backup is newer than local edits on this device, pull the data!
+          if (cloudLastModified > localLastModified) {
             onImportAllData({
               profile: data.backup.profile || profile,
               vehicle: data.backup.vehicle || vehicle,
               shifts: data.backup.shifts || [],
               expenses: data.backup.expenses || [],
-              maintenance: data.backup.maintenance || []
+              maintenance: data.backup.maintenance || [],
+              timestamp: cloudTimestampStr
             });
             
             // Sync local storage cache
             const emailKey = 'gmc_cloud_backup_' + googleUser.email;
             localStorage.setItem(emailKey, JSON.stringify(data.backup));
 
-            alert(`Sincronização Cloud Ativa!\n\nIdentificamos que sua Conta Google tem uma versão mais COMPLETA salva na nuvem com ${cloudShiftsCount} turnos guardados (seu aparelho atual possuía ${localShiftsCount}).\n\nTodos os dados foram sincronizados e atualizados localmente com sucesso!`);
+            alert(`Sincronização Cloud Concluída de Forma Segura!\n\nSeus dados locais foram atualizados com a versão mais recente salva na nuvem vinda do seu outro aparelho!\n\nÚltima atualização detectada: ${new Date(cloudLastModified).toLocaleString()}\nTurnos sincronizados: ${data.backup.shifts?.length || 0}.`);
             shouldUpload = false;
             setSyncing(false);
           }
         }
 
         if (shouldUpload) {
-          // Push current local state to cloud server
+          // Push current local state to cloud server since local modifications are newer
           fetch('/api/backup/save', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -300,7 +310,11 @@ export default function BackupManager({
             if (saveResult.success) {
               const emailKey = 'gmc_cloud_backup_' + googleUser.email;
               localStorage.setItem(emailKey, JSON.stringify(currentPayload));
-              alert(`Sincronização Cloud Ativa com Sucesso!\n\nSeus dados mais recentes (${shifts.length} turnos) foram transmitidos em segurança à nuvem da conta (${googleUser.email})!\n\nAbra o GMC Controle no seu outro dispositivo para sincronizar as mudanças automaticamente!`);
+              
+              // We also save the backup's timestamp as local last modified so we are in sync
+              localStorage.setItem('gmc_last_modified', currentPayload.timestamp);
+
+              alert(`Sincronização Cloud Ativa com Sucesso!\n\nSeus dados mais recentes (${shifts.length} turnos) foram transmitidos em segurança à nuvem da conta (${googleUser.email})!\n\nAo abrir o GMC Controle no seu outro dispositivo, clique para Sincronizar e carregar estas alterações automaticamente.`);
             } else {
               throw new Error(saveResult.error || "Erro de gravação");
             }
@@ -329,7 +343,8 @@ export default function BackupManager({
           if (saveResult.success) {
             const emailKey = 'gmc_cloud_backup_' + googleUser.email;
             localStorage.setItem(emailKey, JSON.stringify(currentPayload));
-            alert(`Sincronização Cloud Ativa & Primeiro Envio!\n\nSeus dados (${shifts.length} turnos) foram gravados no servidor de sincronização GMC para a conta ${googleUser.email}.`);
+            localStorage.setItem('gmc_last_modified', currentPayload.timestamp);
+            alert(`Sincronização Cloud Ativa & Primeiro Envio!\n\nSeus dados (${shifts.length} turnos) foram salvos com sucesso e enviados ao servidor de sincronização GMC para a conta ${googleUser.email}.`);
           } else {
             throw new Error(saveResult.error || "Save error");
           }

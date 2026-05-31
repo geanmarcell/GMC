@@ -112,6 +112,11 @@ export default function App() {
                   setShifts(cloudBackup.shifts || []);
                   setExpenses(cloudBackup.expenses || []);
                   setMaintenanceLog(cloudBackup.maintenance || []);
+                  
+                  // Update local last-modified timestamp with the backup's timestamp or updatedAt
+                  const ts = cloudBackup.timestamp || data.updatedAt || new Date().toISOString();
+                  localStorage.setItem('gmc_last_modified', ts);
+                  
                   console.log("GMC Auto-Sincronização: Seus dados foram carregados diretamente da nuvem GMC com sucesso para o e-mail: " + parsedUser.email);
                 }
               }
@@ -134,6 +139,9 @@ export default function App() {
     e: Expense[],
     m: Maintenance[]
   ) => {
+    // Record current time as our last edited/modified moment
+    localStorage.setItem('gmc_last_modified', new Date().toISOString());
+
     const savedGoogleUser = localStorage.getItem('cpma_google_user');
     if (!savedGoogleUser) return;
     try {
@@ -245,12 +253,16 @@ export default function App() {
     shifts: Shift[];
     expenses: Expense[];
     maintenance: Maintenance[];
+    timestamp?: string;
   }) => {
     if (data.profile) setProfile(data.profile);
     if (data.vehicle) setVehicle(data.vehicle);
     if (data.shifts) setShifts(data.shifts);
     if (data.expenses) setExpenses(data.expenses);
     if (data.maintenance) setMaintenanceLog(data.maintenance);
+
+    const ts = data.timestamp || new Date().toISOString();
+    localStorage.setItem('gmc_last_modified', ts);
   };
 
   // Helper method to update vehicle's current odometer because of high values in shift logging
