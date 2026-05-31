@@ -26,6 +26,14 @@ export interface DriverProfile {
   monthlyGoal: number; // Meta mensal de faturamento líquido (R$)
   annualGoal: number; // Meta anual de faturamento líquido (R$)
   workingDaysPerWeek: number; // Dias de trabalho por semana planejados (ex: 5 ou 6)
+  simHoursPerDay?: number;
+  simDaysPerWeek?: number;
+  simEarningPerHour?: number;
+  simDailyKm?: number;
+  simFuelPrice?: number;
+  simAvgConsumption?: number;
+  simWeeklyFixedCost?: number;
+  simMonthlyCellPlan?: number;
 }
 
 export interface Shift {

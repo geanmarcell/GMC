@@ -35,16 +35,16 @@ export default function GoalsManager({ profile, vehicle, onUpdateProfile }: Goal
   const [fuelType, setFuelType] = useState<FuelType>((vehicle.fuelType as FuelType) || 'Gasolina');
   const [avgConsumption, setAvgConsumption] = useState(vehicle.avgConsumption || 10);
 
-  // Simulation State
-  const [simHoursPerDay, setSimHoursPerDay] = useState(8);
-  const [simDaysPerWeek, setSimDaysPerWeek] = useState(5);
-  const [simEarningPerHour, setSimEarningPerHour] = useState(40); // R$/hora médio
+  // Simulation State initialized dynamically from workspace/sync profile variables
+  const [simHoursPerDay, setSimHoursPerDay] = useState(profile.simHoursPerDay ?? 8);
+  const [simDaysPerWeek, setSimDaysPerWeek] = useState(profile.simDaysPerWeek ?? 5);
+  const [simEarningPerHour, setSimEarningPerHour] = useState(profile.simEarningPerHour ?? 40); // R$/hora médio
   
-  const [simDailyKm, setSimDailyKm] = useState(180);
-  const [simFuelPrice, setSimFuelPrice] = useState(4.50); // R$ por litro ou m³
-  const [simAvgConsumption, setSimAvgConsumption] = useState(vehicle.avgConsumption || 10);
-  const [simWeeklyFixedCost, setSimWeeklyFixedCost] = useState(450); // ex: Aluguel de carro (R$ 450/semana)
-  const [simMonthlyCellPlan, setSimMonthlyCellPlan] = useState(75);
+  const [simDailyKm, setSimDailyKm] = useState(profile.simDailyKm ?? 180);
+  const [simFuelPrice, setSimFuelPrice] = useState(profile.simFuelPrice ?? 4.50); // R$ por litro ou m³
+  const [simAvgConsumption, setSimAvgConsumption] = useState(profile.simAvgConsumption ?? vehicle.avgConsumption ?? 10);
+  const [simWeeklyFixedCost, setSimWeeklyFixedCost] = useState(profile.simWeeklyFixedCost ?? 450); // ex: Aluguel de carro (R$ 450/semana)
+  const [simMonthlyCellPlan, setSimMonthlyCellPlan] = useState(profile.simMonthlyCellPlan ?? 75);
 
   // Sync prop changes to local states
   React.useEffect(() => {
@@ -54,15 +54,43 @@ export default function GoalsManager({ profile, vehicle, onUpdateProfile }: Goal
     setMonthlyGoal(profile.monthlyGoal);
     setAnnualGoal(profile.annualGoal || (profile.monthlyGoal * 12 || 54000));
     setWorkingDays(profile.workingDaysPerWeek);
-  }, [profile.name, profile.city, profile.dailyGoal, profile.monthlyGoal, profile.annualGoal, profile.workingDaysPerWeek]);
+
+    // Dynamic reactive sync when cloud modifications are pulled/restored
+    if (profile.simHoursPerDay !== undefined) setSimHoursPerDay(profile.simHoursPerDay);
+    if (profile.simDaysPerWeek !== undefined) setSimDaysPerWeek(profile.simDaysPerWeek);
+    if (profile.simEarningPerHour !== undefined) setSimEarningPerHour(profile.simEarningPerHour);
+    if (profile.simDailyKm !== undefined) setSimDailyKm(profile.simDailyKm);
+    if (profile.simFuelPrice !== undefined) setSimFuelPrice(profile.simFuelPrice);
+    if (profile.simAvgConsumption !== undefined) setSimAvgConsumption(profile.simAvgConsumption);
+    if (profile.simWeeklyFixedCost !== undefined) setSimWeeklyFixedCost(profile.simWeeklyFixedCost);
+    if (profile.simMonthlyCellPlan !== undefined) setSimMonthlyCellPlan(profile.simMonthlyCellPlan);
+  }, [
+    profile.name, 
+    profile.city, 
+    profile.dailyGoal, 
+    profile.monthlyGoal, 
+    profile.annualGoal, 
+    profile.workingDaysPerWeek,
+    profile.simHoursPerDay,
+    profile.simDaysPerWeek,
+    profile.simEarningPerHour,
+    profile.simDailyKm,
+    profile.simFuelPrice,
+    profile.simAvgConsumption,
+    profile.simWeeklyFixedCost,
+    profile.simMonthlyCellPlan
+  ]);
 
   React.useEffect(() => {
     setVehicleModel(vehicle.model || '');
     setLicensePlate(vehicle.licensePlate || '');
     setFuelType(vehicle.fuelType || 'Gasolina');
     setAvgConsumption(vehicle.avgConsumption || 10);
-    setSimAvgConsumption(vehicle.avgConsumption || 10);
-  }, [vehicle.model, vehicle.licensePlate, vehicle.fuelType, vehicle.avgConsumption]);
+    // Prefer profile specified simulation avg consumption if available, else vehicle's
+    if (profile.simAvgConsumption === undefined) {
+      setSimAvgConsumption(vehicle.avgConsumption || 10);
+    }
+  }, [vehicle.model, vehicle.licensePlate, vehicle.fuelType, vehicle.avgConsumption, profile.simAvgConsumption]);
 
   const handleSaveProfileSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,7 +100,15 @@ export default function GoalsManager({ profile, vehicle, onUpdateProfile }: Goal
       dailyGoal: Number(dailyGoal),
       monthlyGoal: Number(monthlyGoal),
       annualGoal: Number(annualGoal),
-      workingDaysPerWeek: Number(workingDays)
+      workingDaysPerWeek: Number(workingDays),
+      simHoursPerDay: Number(simHoursPerDay),
+      simDaysPerWeek: Number(simDaysPerWeek),
+      simEarningPerHour: Number(simEarningPerHour),
+      simDailyKm: Number(simDailyKm),
+      simFuelPrice: Number(simFuelPrice),
+      simAvgConsumption: Number(simAvgConsumption),
+      simWeeklyFixedCost: Number(simWeeklyFixedCost),
+      simMonthlyCellPlan: Number(simMonthlyCellPlan)
     }, {
       ...vehicle,
       model: vehicleModel,
@@ -80,7 +116,23 @@ export default function GoalsManager({ profile, vehicle, onUpdateProfile }: Goal
       fuelType,
       avgConsumption: Number(avgConsumption)
     });
-    alert("Perfil de trabalho e ficha do veículo atualizados com sucesso!");
+    alert("Perfil de trabalho, ficha do veículo e planejador de faturamento atualizados com sucesso!");
+  };
+
+  // Immediate save for the simulation playground specifically
+  const handleSaveSimulatorState = () => {
+    onUpdateProfile({
+      ...profile,
+      simHoursPerDay: Number(simHoursPerDay),
+      simDaysPerWeek: Number(simDaysPerWeek),
+      simEarningPerHour: Number(simEarningPerHour),
+      simDailyKm: Number(simDailyKm),
+      simFuelPrice: Number(simFuelPrice),
+      simAvgConsumption: Number(simAvgConsumption),
+      simWeeklyFixedCost: Number(simWeeklyFixedCost),
+      simMonthlyCellPlan: Number(simMonthlyCellPlan)
+    });
+    alert("Projeções e dados do Planejador de Faturamento atualizados e enviados para a Nuvem GMC com sucesso!");
   };
 
   // Simulation Calculations (4.33 weeks per month)
@@ -488,6 +540,20 @@ export default function GoalsManager({ profile, vehicle, onUpdateProfile }: Goal
                 <p className="text-[8px] text-slate-400 uppercase font-sans tracking-wide">Sobra por Turno</p>
                 <p className="text-emerald-700 text-xs font-black">R$ {(projectedNetMonthlyEarnings / (totalWorkedDaysPerMonth || 1)).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}/dia</p>
               </div>
+            </div>
+
+            <div className="pt-4 border-t border-slate-200 flex flex-col sm:flex-row gap-3 items-center justify-between">
+              <p className="text-[10px] text-slate-500 font-semibold leading-relaxed">
+                * Quer ver este planejamento no seu computador? Clique em Gravar para salvá-lo na nuvem!
+              </p>
+              <button
+                type="button"
+                onClick={handleSaveSimulatorState}
+                className="w-full sm:w-auto shrink-0 py-2.5 px-5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl transition cursor-pointer text-[11px] flex items-center justify-center gap-2 shadow-xs"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-yellow-300 fill-yellow-300 animate-pulse" />
+                Gravar & Sincronizar Planejamento
+              </button>
             </div>
 
           </div>

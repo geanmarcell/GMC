@@ -106,9 +106,9 @@ export default function App() {
             .then(data => {
               if (data.success && data.backup) {
                 const cloudBackup = data.backup;
-                if (cloudBackup.shifts || cloudBackup.expenses) {
-                  setProfile(cloudBackup.profile);
-                  setVehicle(cloudBackup.vehicle);
+                if (cloudBackup) {
+                  if (cloudBackup.profile) setProfile(cloudBackup.profile);
+                  if (cloudBackup.vehicle) setVehicle(cloudBackup.vehicle);
                   setShifts(cloudBackup.shifts || []);
                   setExpenses(cloudBackup.expenses || []);
                   setMaintenanceLog(cloudBackup.maintenance || []);

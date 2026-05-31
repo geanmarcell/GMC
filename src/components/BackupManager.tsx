@@ -83,13 +83,6 @@ export default function BackupManager({
     };
 
     setGoogleUser(newUser);
-
-    // Also update current profile name
-    onUpdateProfile({
-      ...profile,
-      name: newUser.name
-    });
-
     setShowLoginModal(false);
 
     // Auto-pull backup from Google account if it exists via server API
@@ -98,7 +91,7 @@ export default function BackupManager({
       .then(data => {
         if (data.success && data.backup) {
           onImportAllData({
-            profile: data.backup.profile || profile,
+            profile: data.backup.profile || { ...profile, name: newUser.name },
             vehicle: data.backup.vehicle || vehicle,
             shifts: data.backup.shifts || [],
             expenses: data.backup.expenses || [],
@@ -114,7 +107,7 @@ export default function BackupManager({
             try {
               const payload = JSON.parse(savedBackup);
               onImportAllData({
-                profile: payload.profile || profile,
+                profile: payload.profile || { ...profile, name: newUser.name },
                 vehicle: payload.vehicle || vehicle,
                 shifts: payload.shifts || [],
                 expenses: payload.expenses || [],
@@ -125,6 +118,12 @@ export default function BackupManager({
             } catch (err) {
               console.error(err);
             }
+          } else {
+            // Only update current profile name and backup if no cloud data exists yet (first time)
+            onUpdateProfile({
+              ...profile,
+              name: newUser.name
+            });
           }
         }
       })
@@ -136,7 +135,7 @@ export default function BackupManager({
           try {
             const payload = JSON.parse(savedBackup);
             onImportAllData({
-              profile: payload.profile || profile,
+              profile: payload.profile || { ...profile, name: newUser.name },
               vehicle: payload.vehicle || vehicle,
               shifts: payload.shifts || [],
               expenses: payload.expenses || [],
