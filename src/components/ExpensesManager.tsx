@@ -17,13 +17,16 @@ interface ExpensesManagerProps {
   expenses: Expense[];
   onAddExpense: (expense: Expense) => void;
   onDeleteExpense: (id: string) => void;
+  onUpdateExpense?: (expense: Expense) => void;
 }
 
-export default function ExpensesManager({ expenses, onAddExpense, onDeleteExpense }: ExpensesManagerProps) {
+export default function ExpensesManager({ expenses, onAddExpense, onDeleteExpense, onUpdateExpense }: ExpensesManagerProps) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [filterMonth, setFilterMonth] = useState<string>(new Date().toISOString().substring(0, 7));
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
   // New Expense Form States
   const [date, setDate] = useState(new Date().toISOString().substring(0, 10));
@@ -44,6 +47,24 @@ export default function ExpensesManager({ expenses, onAddExpense, onDeleteExpens
     'Outros'
   ];
 
+  const handleStartEdit = (exp: Expense) => {
+    setEditingExpense(exp);
+    setDate(exp.date);
+    setCategory(exp.category);
+    setDescription(exp.description);
+    setValue(exp.value);
+    setShowAddModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowAddModal(false);
+    setEditingExpense(null);
+    setDate(new Date().toISOString().substring(0, 10));
+    setCategory('Outros');
+    setDescription('');
+    setValue(50.00);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -52,29 +73,54 @@ export default function ExpensesManager({ expenses, onAddExpense, onDeleteExpens
       return;
     }
 
-    const newExpense: Expense = {
-      id: 'e-' + Math.random().toString(36).substring(2, 9),
-      date,
-      category,
-      description,
-      value: Number(value)
-    };
+    if (editingExpense) {
+      const updatedExpense: Expense = {
+        ...editingExpense,
+        date,
+        category,
+        description,
+        value: Number(value)
+      };
+      if (onUpdateExpense) {
+        onUpdateExpense(updatedExpense);
+      }
+    } else {
+      const newExpense: Expense = {
+        id: 'e-' + Math.random().toString(36).substring(2, 9),
+        date,
+        category,
+        description,
+        value: Number(value)
+      };
+      onAddExpense(newExpense);
+    }
 
-    onAddExpense(newExpense);
-    setShowAddModal(false);
+    handleCloseModal();
+  };
 
-    // Reset values
-    setDate(new Date().toISOString().substring(0, 10));
-    setCategory('Outros');
-    setDescription('');
-    setValue(50.00);
+  // Extract all unique YYYY-MM from expenses to build options dynamically
+  const uniqueMonths = Array.from(
+    new Set([
+      new Date().toISOString().substring(0, 7), // Ensure current month is always an option
+      ...expenses.map(e => e.date.substring(0, 7))
+    ])
+  ).sort((a, b) => b.localeCompare(a));
+
+  const formatMonthYearLabel = (yM: string) => {
+    const [year, month] = yM.split('-');
+    const monthsPt = [
+      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+    return `${monthsPt[parseInt(month) - 1]} de ${year}`;
   };
 
   // Filter & Search
   const filteredExpenses = expenses.filter(e => {
     const textMatches = `${e.description} ${e.category}`.toLowerCase().includes(searchTerm.toLowerCase());
     const categoryMatches = filterCategory === 'all' || e.category === filterCategory;
-    return textMatches && categoryMatches;
+    const monthMatches = filterMonth === 'all' || e.date.startsWith(filterMonth);
+    return textMatches && categoryMatches && monthMatches;
   }).sort((a, b) => b.date.localeCompare(a.date));
 
   // Compute stats of general expenses
@@ -121,9 +167,9 @@ export default function ExpensesManager({ expenses, onAddExpense, onDeleteExpens
         </div>
       </div>
 
-      {/* CONTROLS (SEARCH & CATEGORY MAPPING) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-white p-4 rounded-xl border border-slate-210">
-        <div className="col-span-2 relative">
+      {/* CONTROLS (SEARCH & CATEGORY MAPPING & MONTH FILTER) */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-white p-4 rounded-xl border border-slate-210">
+        <div className="md:col-span-2 relative">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
           <input
             type="text"
@@ -142,6 +188,18 @@ export default function ExpensesManager({ expenses, onAddExpense, onDeleteExpens
             <option value="all">Filtro: Todas as Categorias</option>
             {categories.map(c => (
               <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <select
+            value={filterMonth}
+            onChange={(e) => setFilterMonth(e.target.value)}
+            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 font-semibold focus:outline-red-650"
+          >
+            <option value="all">Filtro: Todos os Meses</option>
+            {uniqueMonths.map(m => (
+              <option key={m} value={m}>{formatMonthYearLabel(m)}</option>
             ))}
           </select>
         </div>
@@ -213,14 +271,24 @@ export default function ExpensesManager({ expenses, onAddExpense, onDeleteExpens
                         </button>
                       </div>
                     ) : (
-                      <button
-                        onClick={() => {
-                          setDeletingId(exp.id);
-                        }}
-                        className="text-red-500 hover:text-red-700 p-1 bg-red-50 hover:bg-red-100 rounded-md transition cursor-pointer inline-flex items-center justify-center"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          onClick={() => handleStartEdit(exp)}
+                          className="text-blue-500 hover:text-blue-700 p-1 bg-blue-50 hover:bg-blue-100 rounded-md transition cursor-pointer inline-flex items-center justify-center"
+                          title="Editar Despesa"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setDeletingId(exp.id);
+                          }}
+                          className="text-red-500 hover:text-red-700 p-1 bg-red-50 hover:bg-red-100 rounded-md transition cursor-pointer inline-flex items-center justify-center"
+                          title="Excluir Despesa"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -237,7 +305,7 @@ export default function ExpensesManager({ expenses, onAddExpense, onDeleteExpens
         </table>
       </div>
 
-      {/* MODAL FOR NEW EXPENSE */}
+      {/* MODAL FOR NEW OR EDIT EXPENSE */}
       {showAddModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto no-print">
           <div className="bg-white rounded-2xl border border-slate-200 w-full max-w-md shadow-xl overflow-hidden block">
@@ -246,10 +314,13 @@ export default function ExpensesManager({ expenses, onAddExpense, onDeleteExpens
             <div className="px-6 py-4 bg-slate-900 text-white flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <Receipt className="w-5 h-5 text-red-500" />
-                <h4 className="text-xs font-bold uppercase tracking-wider">Lançar Nova Despesa de Carro</h4>
+                <h4 className="text-xs font-bold uppercase tracking-wider">
+                  {editingExpense ? 'Editar Despesa Lançada' : 'Lançar Nova Despesa de Carro'}
+                </h4>
               </div>
               <button 
-                onClick={() => setShowAddModal(false)}
+                type="button"
+                onClick={handleCloseModal}
                 className="text-slate-400 hover:text-white font-extrabold text-sm uppercase cursor-pointer"
               >
                 X
@@ -317,7 +388,7 @@ export default function ExpensesManager({ expenses, onAddExpense, onDeleteExpens
               <div className="flex items-center gap-3 pt-4 border-t border-slate-100 font-bold">
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={handleCloseModal}
                   className="w-1/2 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition cursor-pointer text-center"
                 >
                   Cancelar
@@ -326,7 +397,7 @@ export default function ExpensesManager({ expenses, onAddExpense, onDeleteExpens
                   type="submit"
                   className="w-1/2 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-xs transition cursor-pointer text-center"
                 >
-                  Confirmar Lançamento
+                  {editingExpense ? 'Salvar Alterações' : 'Confirmar Lançamento'}
                 </button>
               </div>
 

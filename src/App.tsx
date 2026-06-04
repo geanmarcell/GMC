@@ -208,6 +208,14 @@ export default function App() {
     });
   };
 
+  const handleUpdateExpense = (updatedExp: Expense) => {
+    setExpenses(prev => {
+      const updated = prev.map(e => e.id === updatedExp.id ? updatedExp : e);
+      triggerAutoBackup(profile, vehicle, shifts, updated, maintenanceLog);
+      return updated;
+    });
+  };
+
   const handleDeleteExpense = (id: string) => {
     setExpenses(prev => {
       const updated = prev.filter(e => e.id !== id);
@@ -572,6 +580,7 @@ export default function App() {
                 <ExpensesManager 
                   expenses={expenses}
                   onAddExpense={handleAddExpense}
+                  onUpdateExpense={handleUpdateExpense}
                   onDeleteExpense={handleDeleteExpense}
                 />
               )}

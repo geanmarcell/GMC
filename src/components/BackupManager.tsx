@@ -389,6 +389,17 @@ export default function BackupManager({
                 <p className="text-xs font-black text-slate-800 line-clamp-1">{googleUser.name}</p>
                 <p className="text-[10px] text-slate-450 font-mono line-clamp-1">{googleUser.email}</p>
               </div>
+              
+              <button 
+                disabled={syncing}
+                onClick={handleSimulateBackupToCloud}
+                className="py-1.5 px-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-500 text-white font-extrabold text-[10px] rounded-lg transition cursor-pointer flex items-center gap-1.5"
+                title="Sincronizar Cloud Agora"
+              >
+                {syncing ? <RefreshCw className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                <span>Sincronizar Agora</span>
+              </button>
+
               <button 
                 onClick={handleLogout}
                 className="p-1.5 bg-red-50 hover:bg-red-105 border border-red-200 hover:border-red-300 text-red-650 rounded-lg transition"
@@ -496,37 +507,6 @@ export default function BackupManager({
           </form>
         </div>
 
-      </div>
-
-      {/* Cloud database informative security guidelines card */}
-      <div className="bg-slate-900 text-white p-6 rounded-2xl border border-slate-800 space-y-4">
-        <h4 className="text-[10px] uppercase font-mono font-bold tracking-widest text-slate-550 flex items-center gap-1.5">
-          <Cloud className="w-4 h-4 text-blue-400" /> Sincronização Automática Contínua por Banco (Firebase)
-        </h4>
-        
-        <p className="text-xs text-slate-400 leading-relaxed font-semibold">
-          Nossa arquitetura GMC está preparada para se conectar a servidores de banco de dados distribuídos em tempo real (Firebase Firestore). Isso permite que qualquer turno que você digitar em seu celular apareça em tempo real no seu notebook sem precisar exportar códigos manuais!
-        </p>
-
-        <div className="p-4 bg-slate-850 rounded-xl border border-slate-800 md:flex justify-between items-center gap-4">
-          <div className="space-y-0.5">
-            <p className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1">
-              <Database className="w-3.5 h-3.5 text-blue-400" /> Banco de dados autônomo offline-first
-            </p>
-            <p className="text-[11px] text-slate-450 leading-relaxed">
-              O sistema possui memória local inteligente. Suas informações nunca são enviadas a servidores sem consentimento para proteção total dos seus faturamentos e placas de veículos.
-            </p>
-          </div>
-
-          <button 
-            disabled={syncing}
-            onClick={handleSimulateBackupToCloud}
-            className="w-full md:w-auto shrink-0 py-2.5 px-4.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 text-white text-[11px] font-extrabold uppercase tracking-wide rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 mt-3 md:mt-0"
-          >
-            {syncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-            <span>Ativar Sincronização Rápida</span>
-          </button>
-        </div>
       </div>
 
       {/* 3. SIMULATED GOOGLE AUTH MODAL DIALOG */}
