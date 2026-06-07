@@ -34,6 +34,7 @@ export interface DriverProfile {
   simAvgConsumption?: number;
   simWeeklyFixedCost?: number;
   simMonthlyCellPlan?: number;
+  customCategories?: string[];
 }
 
 export interface Shift {
@@ -59,17 +60,7 @@ export interface Shift {
   notes?: string;
 }
 
-export type ExpenseCategory = 
-  | 'Combustível'
-  | 'Aluguel'
-  | 'Financiamento'
-  | 'Seguro'
-  | 'IPVA/Impostos'
-  | 'Manutenção'
-  | 'Limpeza/Lava-jato'
-  | 'Alimentação'
-  | 'Celular/Internet'
-  | 'Outros';
+export type ExpenseCategory = string;
 
 export interface Expense {
   id: string;

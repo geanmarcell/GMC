@@ -582,6 +582,8 @@ export default function App() {
                   onAddExpense={handleAddExpense}
                   onUpdateExpense={handleUpdateExpense}
                   onDeleteExpense={handleDeleteExpense}
+                  profile={profile}
+                  onUpdateProfile={handleUpdateProfile}
                 />
               )}
 

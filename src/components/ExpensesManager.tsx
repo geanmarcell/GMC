@@ -11,16 +11,25 @@ import {
   Receipt,
   Edit2
 } from 'lucide-react';
-import { Expense, ExpenseCategory } from '../types';
+import { Expense, ExpenseCategory, DriverProfile } from '../types';
 
 interface ExpensesManagerProps {
   expenses: Expense[];
   onAddExpense: (expense: Expense) => void;
   onDeleteExpense: (id: string) => void;
   onUpdateExpense?: (expense: Expense) => void;
+  profile?: DriverProfile;
+  onUpdateProfile?: (profile: DriverProfile) => void;
 }
 
-export default function ExpensesManager({ expenses, onAddExpense, onDeleteExpense, onUpdateExpense }: ExpensesManagerProps) {
+export default function ExpensesManager({ 
+  expenses, 
+  onAddExpense, 
+  onDeleteExpense, 
+  onUpdateExpense,
+  profile,
+  onUpdateProfile
+}: ExpensesManagerProps) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
@@ -34,7 +43,15 @@ export default function ExpensesManager({ expenses, onAddExpense, onDeleteExpens
   const [description, setDescription] = useState('');
   const [value, setValue] = useState<number>(50.00);
 
-  const categories: ExpenseCategory[] = [
+  // Custom categories setup
+  const [showNewCatInput, setShowNewCatInput] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [localCustomCategories, setLocalCustomCategories] = useState<string[]>(() => {
+    const saved = localStorage.getItem('gmc_fallback_custom_categories');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const defaultCategories: string[] = [
     'Combustível',
     'Aluguel',
     'Financiamento',
@@ -45,6 +62,12 @@ export default function ExpensesManager({ expenses, onAddExpense, onDeleteExpens
     'Alimentação',
     'Celular/Internet',
     'Outros'
+  ];
+
+  const customCategoriesList = profile?.customCategories ?? localCustomCategories;
+  const categories: ExpenseCategory[] = [
+    ...defaultCategories,
+    ...customCategoriesList
   ];
 
   const handleStartEdit = (exp: Expense) => {
@@ -63,6 +86,34 @@ export default function ExpensesManager({ expenses, onAddExpense, onDeleteExpens
     setCategory('Outros');
     setDescription('');
     setValue(50.00);
+    setShowNewCatInput(false);
+    setNewCatName('');
+  };
+
+  const handleAddCustomCategory = () => {
+    const trimmed = newCatName.trim();
+    if (!trimmed) return;
+
+    if (defaultCategories.includes(trimmed) || customCategoriesList.includes(trimmed)) {
+      alert("Esta categoria já existe!");
+      return;
+    }
+
+    if (onUpdateProfile && profile) {
+      const updatedCustom = [...(profile.customCategories || []), trimmed];
+      onUpdateProfile({
+        ...profile,
+        customCategories: updatedCustom
+      });
+    } else {
+      const updatedLocal = [...localCustomCategories, trimmed];
+      setLocalCustomCategories(updatedLocal);
+      localStorage.setItem('gmc_fallback_custom_categories', JSON.stringify(updatedLocal));
+    }
+
+    setCategory(trimmed);
+    setNewCatName('');
+    setShowNewCatInput(false);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -345,15 +396,65 @@ export default function ExpensesManager({ expenses, onAddExpense, onDeleteExpens
               {/* Category */}
               <div>
                 <label className="text-slate-600 font-bold block mb-1">Categoria</label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value as ExpenseCategory)}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 text-slate-700 font-semibold rounded-xl focus:outline-red-600"
-                >
-                  {categories.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
+                {!showNewCatInput ? (
+                  <>
+                    <select
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value as ExpenseCategory)}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 text-slate-700 font-semibold rounded-xl focus:outline-red-600"
+                    >
+                      {categories.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                    <div className="flex justify-end items-center mt-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowNewCatInput(true)}
+                        className="text-[10px] text-blue-600 hover:text-blue-700 font-extrabold hover:underline cursor-pointer flex items-center gap-1 p-1 bg-blue-50/50 rounded-md"
+                      >
+                        <Plus className="w-2.5 h-2.5 text-blue-600" /> Cadastrar Outra Categoria...
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2 mt-1">
+                    <p className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">Nova Categoria de Despesa</p>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        autoFocus
+                        placeholder="Ex: Pedágio, Licenciamento..."
+                        value={newCatName}
+                        onChange={(e) => setNewCatName(e.target.value)}
+                        className="flex-1 p-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-red-600"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddCustomCategory();
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddCustomCategory}
+                        className="py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition cursor-pointer"
+                      >
+                        Gravar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowNewCatInput(false);
+                          setNewCatName('');
+                        }}
+                        className="py-2 px-2.5 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-lg text-xs font-bold transition cursor-pointer"
+                      >
+                        X
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Description */}
