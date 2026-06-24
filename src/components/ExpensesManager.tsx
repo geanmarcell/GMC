@@ -34,7 +34,7 @@ export default function ExpensesManager({
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterMonth, setFilterMonth] = useState<string>(new Date().toISOString().substring(0, 7));
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
   // New Expense Form States
@@ -303,44 +303,22 @@ export default function ExpensesManager({
 
                   {/* Action */}
                   <td className="py-3.5 px-4 text-center no-print">
-                    {deletingId === exp.id ? (
-                      <div className="flex items-center justify-center gap-1">
-                        <button
-                          onClick={() => {
-                            onDeleteExpense(exp.id);
-                            setDeletingId(null);
-                          }}
-                          className="px-2 py-1 bg-red-650 hover:bg-red-700 text-white font-extrabold text-[9px] uppercase rounded-lg transition cursor-pointer"
-                        >
-                          Apagar?
-                        </button>
-                        <button
-                          onClick={() => setDeletingId(null)}
-                          className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-705 font-bold text-[9px] uppercase rounded-lg transition cursor-pointer"
-                        >
-                          X
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          onClick={() => handleStartEdit(exp)}
-                          className="text-blue-500 hover:text-blue-700 p-1 bg-blue-50 hover:bg-blue-100 rounded-md transition cursor-pointer inline-flex items-center justify-center"
-                          title="Editar Despesa"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            setDeletingId(exp.id);
-                          }}
-                          className="text-red-500 hover:text-red-700 p-1 bg-red-50 hover:bg-red-100 rounded-md transition cursor-pointer inline-flex items-center justify-center"
-                          title="Excluir Despesa"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex items-center justify-center gap-1.5">
+                      <button
+                        onClick={() => handleStartEdit(exp)}
+                        className="text-blue-500 hover:text-blue-700 p-1 bg-blue-50 hover:bg-blue-100 rounded-md transition cursor-pointer inline-flex items-center justify-center"
+                        title="Editar Despesa"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setExpenseToDelete(exp)}
+                        className="text-red-500 hover:text-red-700 p-1 bg-red-50 hover:bg-red-100 rounded-md transition cursor-pointer inline-flex items-center justify-center"
+                        title="Excluir Despesa"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -503,6 +481,74 @@ export default function ExpensesManager({
               </div>
 
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL FOR CONFIRM DELETION */}
+      {expenseToDelete && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto no-print">
+          <div className="bg-white rounded-2xl border border-slate-200 w-full max-w-sm shadow-xl overflow-hidden block">
+            <div className="px-6 py-4 bg-red-650 text-white flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <Trash2 className="w-5 h-5 text-white animate-pulse" />
+                <h4 className="text-xs font-bold uppercase tracking-wider">Confirmar Exclusão</h4>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setExpenseToDelete(null)}
+                className="text-white/80 hover:text-white font-extrabold text-sm uppercase cursor-pointer"
+              >
+                X
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <p className="text-xs font-bold text-slate-600">
+                Tem certeza de que deseja excluir permanentemente esta despesa lançada? Esta ação não poderá ser desfeita.
+              </p>
+              
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs text-slate-700">
+                <div className="flex justify-between">
+                  <span className="font-semibold text-slate-400">Data:</span>
+                  <span className="font-mono font-bold">{new Date(expenseToDelete.date + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-semibold text-slate-400">Categoria:</span>
+                  <span className="font-extrabold text-slate-800">{expenseToDelete.category}</span>
+                </div>
+                {expenseToDelete.description && (
+                  <div className="flex justify-between">
+                    <span className="font-semibold text-slate-400">Descrição:</span>
+                    <span className="font-medium text-slate-800 max-w-[200px] truncate text-right">{expenseToDelete.description}</span>
+                  </div>
+                )}
+                <div className="flex justify-between pt-1.5 border-t border-slate-200">
+                  <span className="font-bold text-red-600">Valor:</span>
+                  <span className="font-mono font-black text-red-650">R$ {expenseToDelete.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2 font-bold text-xs">
+                <button
+                  type="button"
+                  onClick={() => setExpenseToDelete(null)}
+                  className="w-1/2 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition cursor-pointer text-center"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onDeleteExpense(expenseToDelete.id);
+                    setExpenseToDelete(null);
+                  }}
+                  className="w-1/2 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-xs transition cursor-pointer text-center"
+                >
+                  Excluir Despesa
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
