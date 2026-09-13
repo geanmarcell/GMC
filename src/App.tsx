@@ -21,6 +21,7 @@ import {
   Cloud,
   Sliders
 } from 'lucide-react';
+import { Analytics } from '@vercel/analytics/react';
 import { Shift, Expense, Vehicle, DriverProfile, Maintenance } from './types';
 import { 
   DEFAULT_VEHICLE, 
@@ -648,6 +649,7 @@ export default function App() {
 
       </div>
 
+      <Analytics />
     </div>
   );
 }
