@@ -53,11 +53,25 @@ export default function BackupManager({
 }: BackupManagerProps) {
   // User Authentication Simulation State
   const [googleUser, setGoogleUser] = useState<{ email: string; name: string; photo?: string } | null>(() => {
-    const saved = localStorage.getItem('cpma_google_user');
-    return saved ? JSON.parse(saved) : null;
+    const saved = localStorage.getItem('gmc_google_user') || localStorage.getItem('cpma_google_user');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (_) {}
+    }
+    if (profile.name === 'Gean Carvalho') {
+      return {
+        email: 'geanmarcelldecarvalho@gmail.com',
+        name: 'Gean Carvalho',
+        photo: 'https://api.dicebear.com/7.x/initials/svg?seed=Gean%20Carvalho'
+      };
+    }
+    return null;
   });
 
-  const [inputEmail, setInputEmail] = useState('');
+  const [inputEmail, setInputEmail] = useState(() => {
+    return profile.name === 'Gean Carvalho' ? 'geanmarcelldecarvalho@gmail.com' : '';
+  });
   const [inputName, setInputName] = useState(profile.name || '');
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -135,8 +149,10 @@ export default function BackupManager({
   // Synchronize Google User State to Local Storage
   useEffect(() => {
     if (googleUser) {
+      localStorage.setItem('gmc_google_user', JSON.stringify(googleUser));
       localStorage.setItem('cpma_google_user', JSON.stringify(googleUser));
     } else {
+      localStorage.removeItem('gmc_google_user');
       localStorage.removeItem('cpma_google_user');
     }
   }, [googleUser]);
@@ -920,7 +936,7 @@ export default function BackupManager({
                 <input
                   type="email"
                   placeholder="seuemail@gmail.com"
-                  defaultValue={profile.name === 'Gean Carvalho' ? 'geanmarcelldecarvalho@gmail.com' : ''}
+                  value={inputEmail}
                   onChange={(e) => setInputEmail(e.target.value)}
                   className="flex-1 p-2.5 bg-slate-50 border border-slate-250 rounded-xl font-mono text-xs text-slate-800 outline-none focus:outline-blue-600 focus:bg-white"
                 />

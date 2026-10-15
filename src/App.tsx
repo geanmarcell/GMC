@@ -94,46 +94,49 @@ export default function App() {
     localStorage.setItem('gmc_driver_maintenance', JSON.stringify(maintenanceLog));
   }, [maintenanceLog]);
 
-  // Auto-Pull on initial load if logged in with Google Account
+  // Auto-Pull on initial load if logged in or default Gean Carvalho account
   useEffect(() => {
-    const savedGoogleUser = localStorage.getItem('cpma_google_user');
+    let emailToSync: string | null = null;
+    const savedGoogleUser = localStorage.getItem('gmc_google_user') || localStorage.getItem('cpma_google_user');
     if (savedGoogleUser) {
       try {
-        const parsedUser = JSON.parse(savedGoogleUser);
-        if (parsedUser && parsedUser.email) {
-          fetch(`/api/backup/load/${encodeURIComponent(parsedUser.email)}`)
-            .then(res => res.json())
-            .then(data => {
-              if (data.success && data.backup) {
-                const cloudBackup = data.backup;
-                if (cloudBackup) {
-                  const localLastModifiedStr = localStorage.getItem('gmc_last_modified');
-                  const localLastModified = localLastModifiedStr ? new Date(localLastModifiedStr).getTime() : 0;
-                  const cloudTimestampStr = cloudBackup.timestamp || data.updatedAt;
-                  const cloudLastModified = cloudTimestampStr ? new Date(cloudTimestampStr).getTime() : 0;
-
-                  // Only overwrite if cloud data is newer or local has not been modified
-                  if (cloudLastModified >= localLastModified) {
-                    if (cloudBackup.profile) setProfile(cloudBackup.profile);
-                    if (cloudBackup.vehicle) setVehicle(cloudBackup.vehicle);
-                    setShifts(cloudBackup.shifts || []);
-                    setExpenses(cloudBackup.expenses || []);
-                    setMaintenanceLog(cloudBackup.maintenance || []);
-                    localStorage.setItem('gmc_last_modified', cloudTimestampStr || new Date().toISOString());
-                    console.log("GMC Auto-Sincronização: Dados da nuvem aplicados com sucesso para " + parsedUser.email);
-                  } else {
-                    console.log("GMC Auto-Sincronização: Dados locais são mais recentes que a nuvem.");
-                  }
-                }
-              }
-            })
-            .catch(err => {
-              console.error("Erro no auto-pull no carregamento inicial:", err);
-            });
+        const parsed = JSON.parse(savedGoogleUser);
+        if (parsed && parsed.email) {
+          emailToSync = parsed.email;
         }
-      } catch (err) {
-        console.error("Erro parsing google user on mount:", err);
-      }
+      } catch (_) {}
+    } else if (profile.name === 'Gean Carvalho') {
+      emailToSync = 'geanmarcelldecarvalho@gmail.com';
+    }
+
+    if (emailToSync) {
+      fetch(`/api/backup/load/${encodeURIComponent(emailToSync)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.backup) {
+            const cloudBackup = data.backup;
+            const localLastModifiedStr = localStorage.getItem('gmc_last_modified');
+            const localLastModified = localLastModifiedStr ? new Date(localLastModifiedStr).getTime() : 0;
+            const cloudTimestampStr = cloudBackup.timestamp || data.updatedAt;
+            const cloudLastModified = cloudTimestampStr ? new Date(cloudTimestampStr).getTime() : 0;
+
+            // Only overwrite if cloud data has shifts/newer timestamp or local hasn't been modified
+            if (cloudLastModified >= localLastModified || !localLastModifiedStr) {
+              if (cloudBackup.profile) setProfile(cloudBackup.profile);
+              if (cloudBackup.vehicle) setVehicle(cloudBackup.vehicle);
+              if (Array.isArray(cloudBackup.shifts) && cloudBackup.shifts.length > 0) {
+                setShifts(cloudBackup.shifts);
+              }
+              if (Array.isArray(cloudBackup.expenses)) setExpenses(cloudBackup.expenses);
+              if (Array.isArray(cloudBackup.maintenance)) setMaintenanceLog(cloudBackup.maintenance);
+              localStorage.setItem('gmc_last_modified', cloudTimestampStr || new Date().toISOString());
+              console.log("GMC Auto-Sincronização: Dados da nuvem sincronizados com sucesso para " + emailToSync);
+            }
+          }
+        })
+        .catch(err => {
+          console.error("Erro no auto-pull no carregamento inicial:", err);
+        });
     }
   }, []);
 
