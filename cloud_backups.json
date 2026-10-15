@@ -1,12 +1,12 @@
 {
   "geanmarcelldecarvalho@gmail.com": {
-    "updatedAt": "2026-10-15T21:08:28.992Z",
+    "updatedAt": "2026-10-15T21:21:21.092Z",
     "backup": {
       "shifts": [
         {
           "id": "s1",
           "date": "2026-05-11",
-          "totalKm": 200
+          "totalKm": 150
         }
       ],
       "expenses": [],

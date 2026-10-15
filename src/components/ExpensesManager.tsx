@@ -50,6 +50,7 @@ export default function ExpensesManager({
     const saved = localStorage.getItem('gmc_fallback_custom_categories');
     return saved ? JSON.parse(saved) : [];
   });
+  const [formError, setFormError] = useState<string | null>(null);
 
   const defaultCategories: string[] = [
     'Combustível',
@@ -95,9 +96,10 @@ export default function ExpensesManager({
     if (!trimmed) return;
 
     if (defaultCategories.includes(trimmed) || customCategoriesList.includes(trimmed)) {
-      alert("Esta categoria já existe!");
+      setFormError("Esta categoria já existe!");
       return;
     }
+    setFormError(null);
 
     if (onUpdateProfile && profile) {
       const updatedCustom = [...(profile.customCategories || []), trimmed];
@@ -120,9 +122,10 @@ export default function ExpensesManager({
     e.preventDefault();
 
     if (value <= 0) {
-      alert("Erro: O valor da despesa deve ser maior que zero!");
+      setFormError("Erro: O valor da despesa deve ser maior que zero!");
       return;
     }
+    setFormError(null);
 
     if (editingExpense) {
       const updatedExpense: Expense = {
@@ -358,6 +361,12 @@ export default function ExpensesManager({
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="p-6 text-xs space-y-4">
+              {formError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl font-bold text-xs flex items-center justify-between">
+                  <span>⚠️ {formError}</span>
+                  <button type="button" onClick={() => setFormError(null)} className="text-red-500 hover:text-red-700 font-black">✕</button>
+                </div>
+              )}
               
               {/* Date */}
               <div>

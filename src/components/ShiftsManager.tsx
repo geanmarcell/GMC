@@ -56,10 +56,12 @@ export default function ShiftsManager({
   const [foodExpense, setFoodExpense] = useState(0.0);
   const [otherExpenses, setOtherExpenses] = useState(0.0);
   const [notes, setNotes] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Open modal for new shift
   const handleOpenAdd = () => {
     setIsEditing(null);
+    setFormError(null);
     setDate(new Date().toISOString().substring(0, 10));
     setHoursWorked(8.0);
     setStartOdometer(vehicle.currentOdometer);
@@ -79,6 +81,7 @@ export default function ShiftsManager({
   // Open modal for editing existing shift
   const handleOpenEdit = (s: Shift) => {
     setIsEditing(s.id);
+    setFormError(null);
     setDate(s.date);
     setHoursWorked(s.hoursWorked);
     setStartOdometer(s.startOdometer);
@@ -100,9 +103,10 @@ export default function ShiftsManager({
     
     // Validations
     if (endOdometer < startOdometer) {
-      alert("Erro: O odômetro final não pode ser menor que o odômetro inicial!");
+      setFormError("Erro: O odômetro final não pode ser menor que o odômetro inicial!");
       return;
     }
+    setFormError(null);
 
     const totalKm = endOdometer - startOdometer;
 
@@ -396,6 +400,12 @@ export default function ShiftsManager({
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="p-4 sm:p-6 text-xs space-y-4 sm:space-y-5 overflow-y-auto flex-1">
+              {formError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl font-bold text-xs flex items-center justify-between">
+                  <span>⚠️ {formError}</span>
+                  <button type="button" onClick={() => setFormError(null)} className="text-red-500 hover:text-red-700 font-black">✕</button>
+                </div>
+              )}
               
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 {/* Date */}

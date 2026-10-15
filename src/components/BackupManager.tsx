@@ -16,7 +16,12 @@ import {
   HelpCircle,
   Sparkles,
   Database,
-  UserCheck
+  UserCheck,
+  AlertCircle,
+  CheckCircle2,
+  AlertTriangle,
+  Info,
+  X
 } from 'lucide-react';
 import { DriverProfile, Vehicle, Shift, Expense, Maintenance } from '../types';
 
@@ -59,6 +64,53 @@ export default function BackupManager({
   const [importCode, setImportCode] = useState('');
   const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const [actionLoading, setActionLoading] = useState<'upload' | 'download' | 'refresh' | null>(null);
+
+  // In-app Notification & Modal confirmation state (No window.alert/window.confirm)
+  const [notification, setNotification] = useState<{
+    isOpen: boolean;
+    type: 'success' | 'error' | 'warning' | 'info' | 'confirm';
+    title: string;
+    message: string;
+    bulletPoints?: string[];
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm?: () => void;
+  } | null>(null);
+
+  const showNotification = (
+    type: 'success' | 'error' | 'warning' | 'info',
+    title: string,
+    message: string,
+    bulletPoints?: string[]
+  ) => {
+    setNotification({
+      isOpen: true,
+      type,
+      title,
+      message,
+      bulletPoints
+    });
+  };
+
+  const showConfirmation = (
+    title: string,
+    message: string,
+    confirmText: string,
+    cancelText: string,
+    onConfirm: () => void,
+    bulletPoints?: string[]
+  ) => {
+    setNotification({
+      isOpen: true,
+      type: 'confirm',
+      title,
+      message,
+      confirmText,
+      cancelText,
+      onConfirm,
+      bulletPoints
+    });
+  };
 
   // Server health indicator
   const [serverOnline, setServerOnline] = useState<boolean | null>(null);
@@ -134,7 +186,11 @@ export default function BackupManager({
   const handleUploadToCloud = async (overrideEmail?: string, silent = false) => {
     const targetEmail = (overrideEmail || googleUser?.email || inputEmail || '').trim().toLowerCase();
     if (!targetEmail || !targetEmail.includes('@')) {
-      alert('Por favor, conecte ou informe seu e-mail da Conta Google primeiro!');
+      showNotification(
+        'warning',
+        'E-mail da Conta Google Necessário',
+        'Por favor, conecte ou informe seu e-mail do Google primeiro para salvar na nuvem.'
+      );
       setInputEmail(profile.name === 'Gean Carvalho' ? 'geanmarcelldecarvalho@gmail.com' : '');
       setShowLoginModal(true);
       return;
@@ -178,7 +234,18 @@ export default function BackupManager({
         await refreshCloudStatus(targetEmail);
 
         if (!silent) {
-          alert(`✅ DADOS SALVOS NA NUVEM COM SUCESSO!\n\nForam transmitidos para sua conta (${targetEmail}):\n• ${shifts.length} turnos registrados\n• ${expenses.length} despesas extras\n• ${maintenance.length} manutenções\n• Dados do motorista e veículo\n\nAgora, no seu notebook, basta entrar com este mesmo e-mail (${targetEmail}) e clicar em "Baixar dados da Nuvem" ou usar o PIN de 6 dígitos!`);
+          showNotification(
+            'success',
+            'Dados Salvos na Nuvem com Sucesso!',
+            `Seus dados foram enviados para o servidor da Nuvem GMC na conta ${targetEmail}.`,
+            [
+              `${shifts.length} turnos registrados transmitidos`,
+              `${expenses.length} despesas extras transmitidas`,
+              `${maintenance.length} manutenções registradas`,
+              `Veículo: ${vehicle.model || 'Configurado'} (${vehicle.licensePlate || 'GMC'})`,
+              `Agora, no notebook, conecte o mesmo e-mail (${targetEmail}) e clique em "Baixar dados da Nuvem" ou use o PIN de 6 dígitos!`
+            ]
+          );
         }
       } else {
         throw new Error(data.error || 'Falha ao salvar no servidor');
@@ -189,7 +256,15 @@ export default function BackupManager({
       // Local fallback
       const emailKey = 'gmc_cloud_backup_' + targetEmail;
       localStorage.setItem(emailKey, JSON.stringify(currentPayload));
-      alert(`⚠️ Atenção: Não foi possível sincronizar com o servidor da nuvem no momento (${err.message || 'Falha de rede'}). Os dados foram salvos no armazenamento local deste aparelho. Use a opção de Código de Transferência ou gere o PIN de 6 dígitos.`);
+      showNotification(
+        'error',
+        'Falha ao Conectar com o Servidor',
+        `Não foi possível enviar para a nuvem no momento (${err.message || 'Falha de rede'}). Os dados foram mantidos seguros no armazenamento deste aparelho.`,
+        [
+          'Verifique sua conexão com a internet',
+          'Você também pode gerar um PIN de 6 Dígitos ou copiar o Código de Transferência abaixo.'
+        ]
+      );
     }
   };
 
@@ -197,7 +272,11 @@ export default function BackupManager({
   const handleDownloadFromCloud = async (overrideEmail?: string) => {
     const targetEmail = (overrideEmail || googleUser?.email || inputEmail || '').trim().toLowerCase();
     if (!targetEmail || !targetEmail.includes('@')) {
-      alert('Por favor, informe seu e-mail da Conta Google primeiro!');
+      showNotification(
+        'warning',
+        'E-mail Necessário',
+        'Por favor, informe seu e-mail da Conta Google para buscar seus dados.'
+      );
       setInputEmail(profile.name === 'Gean Carvalho' ? 'geanmarcelldecarvalho@gmail.com' : '');
       setShowLoginModal(true);
       return;
@@ -235,15 +314,43 @@ export default function BackupManager({
 
         await refreshCloudStatus(targetEmail);
 
-        alert(`✅ DADOS DA NUVEM BAIXADOS COM SUCESSO!\n\nForam sincronizados neste aparelho para (${targetEmail}):\n• ${backup.shifts?.length || 0} turnos carregados\n• ${backup.expenses?.length || 0} despesas extras\n• ${backup.maintenance?.length || 0} manutenções\n• Veículo: ${backup.vehicle?.model || 'Configurado'}\n\nTodos os dados salvos pelo outro dispositivo agora estão 100% atualizados aqui!`);
+        showNotification(
+          'success',
+          'Dados da Nuvem Baixados com Sucesso!',
+          `Seu aparelho foi sincronizado com os dados salvos para ${targetEmail}:`,
+          [
+            `${backup.shifts?.length || 0} turnos carregados e aplicados`,
+            `${backup.expenses?.length || 0} despesas extras sincronizadas`,
+            `${backup.maintenance?.length || 0} manutenções sincronizadas`,
+            `Veículo: ${backup.vehicle?.model || 'Configurado'}`,
+            'Este dispositivo agora está 100% atualizado com suas informações!'
+          ]
+        );
       } else {
         // Did not find in server
-        alert(`⚠️ Nenhum backup encontrado na nuvem para o e-mail:\n"${targetEmail}"\n\nCOMO RESOLVER:\n1. No seu TABLET, abra esta mesma tela "Backup & Nuvem" e confirme se clicou no botão verde "Enviar dados deste aparelho para a Nuvem".\n2. Verifique se o e-mail no tablet é exatamente "${targetEmail}".\n3. Alternativa Instantânea: No tablet, clique em "Gerar PIN de 6 Dígitos" logo abaixo e digite o número aqui no notebook!`);
+        showNotification(
+          'warning',
+          'Nenhum Backup Encontrado na Nuvem',
+          `Não encontramos nenhum dado salvo no servidor para o e-mail: "${targetEmail}".`,
+          [
+            '1. No seu TABLET, abra a aba "Backup & Nuvem" e confirme se clicou no botão verde "Enviar dados deste aparelho para a Nuvem".',
+            `2. Verifique se o e-mail no tablet é exatamente "${targetEmail}".`,
+            '3. Alternativa Instantânea: No tablet, clique em "Gerar PIN de 6 Dígitos" logo abaixo e digite o número aqui no notebook!'
+          ]
+        );
       }
     } catch (err: any) {
       setActionLoading(null);
       console.error("Erro ao baixar da nuvem:", err);
-      alert(`⚠️ Erro de conexão com o servidor ao baixar da nuvem: ${err.message || 'Verifique a rede'}\n\nDica: você também pode usar a Sincronização por PIN de 6 Dígitos ou colar o Código de Transferência abaixo.`);
+      showNotification(
+        'error',
+        'Erro de Conexão',
+        `Não foi possível se comunicar com o servidor da nuvem: ${err.message || 'Verifique a rede'}.`,
+        [
+          'Você também pode usar a Sincronização por PIN de 6 Dígitos logo abaixo.',
+          'Ou copiar o Código de Transferência GMC diretamente entre os navegadores.'
+        ]
+      );
     }
   };
 
@@ -287,7 +394,11 @@ export default function BackupManager({
       }
     } catch (err: any) {
       setPinLoading(false);
-      alert('Erro ao gerar PIN no servidor: ' + (err.message || 'Verifique a conexão'));
+      showNotification(
+        'error',
+        'Erro ao Gerar PIN',
+        `Não foi possível gerar o PIN no servidor: ${err.message || 'Verifique sua conexão de rede'}.`
+      );
     }
   };
 
@@ -296,7 +407,11 @@ export default function BackupManager({
     if (e) e.preventDefault();
     const cleanPin = inputPin.replace(/[^0-9]/g, '');
     if (cleanPin.length !== 6) {
-      alert('Por favor, digite o PIN de 6 números gerado no tablet/celular!');
+      showNotification(
+        'warning',
+        'PIN Incompleto',
+        'Por favor, digite os 6 números gerados no seu tablet ou celular.'
+      );
       return;
     }
 
@@ -326,21 +441,44 @@ export default function BackupManager({
           });
         }
 
-        alert(`✅ SUCESSO! DADOS IMPORTADOS VIA PIN!\n\nForam sincronizados com perfeição neste aparelho:\n• ${backup.shifts?.length || 0} turnos registrados\n• ${backup.expenses?.length || 0} despesas extras\n• ${backup.maintenance?.length || 0} manutenções\n• Veículo: ${backup.vehicle?.model || 'Configurado'}\n\nO notebook agora está exatamente idêntico ao seu tablet!`);
         setInputPin('');
+        showNotification(
+          'success',
+          'Sincronização por PIN Concluída!',
+          `Seu notebook agora está exatamente idêntico ao seu tablet:`,
+          [
+            `${backup.shifts?.length || 0} turnos importados com sucesso`,
+            `${backup.expenses?.length || 0} despesas extras sincronizadas`,
+            `${backup.maintenance?.length || 0} manutenções sincronizadas`,
+            `Veículo: ${backup.vehicle?.model || 'Configurado'}`
+          ]
+        );
       } else {
-        throw new Error(data.error || 'PIN não localizado no servidor');
+        showNotification(
+          'warning',
+          'PIN Não Encontrado',
+          data.error || `O PIN "${cleanPin}" não foi localizado no servidor.`,
+          [
+            '1. Verifique se o código digitado foi exatamente o exibido no tablet.',
+            '2. No tablet, certifique-se de que clicou em "Gerar PIN de 6 Dígitos".',
+            '3. Gere um novo PIN no tablet se tiver expirado.'
+          ]
+        );
       }
     } catch (err: any) {
       setPinLoading(false);
-      alert(`⚠️ ${err.message || 'PIN não encontrado no servidor'}\n\nVerifique:\n1. Se o código digitado foi exatamente o exibido no tablet.\n2. Se você clicou no tablet em "Gerar PIN de 6 Dígitos".`);
+      showNotification(
+        'error',
+        'Erro na Consulta do PIN',
+        `Houve um erro de rede: ${err.message || 'Verifique a conexão'}.`
+      );
     }
   };
 
   const handleSimulatedGoogleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputEmail.includes('@')) {
-      alert('Por favor, informe seu email da Conta do Google válido!');
+      showNotification('warning', 'E-mail Inválido', 'Por favor, informe seu endereço de e-mail do Google válido.');
       return;
     }
 
@@ -363,31 +501,61 @@ export default function BackupManager({
         // Cloud backup exists!
         const cloudDate = statusData.updatedAt ? new Date(statusData.updatedAt).toLocaleString('pt-BR') : 'recente';
         
-        // Auto pull if user confirms or if device has standard initial mock
-        const choice = window.confirm(
-          `Encontramos um backup na nuvem para ${trimmedEmail} salvo em ${cloudDate} com ${statusData.shiftsCount || 0} turnos.\n\n` +
-          `Deseja BAIXAR os dados da nuvem agora para este aparelho?`
+        showConfirmation(
+          'Backup Encontrado na Nuvem!',
+          `Encontramos um histórico salvo para ${trimmedEmail} gravado em ${cloudDate} contendo ${statusData.shiftsCount || 0} turnos e ${statusData.expensesCount || 0} despesas.`,
+          'Baixar Dados da Nuvem Agora',
+          'Manter Dados Locais Deste Aparelho',
+          async () => {
+            const loadRes = await fetch(`/api/backup/load/${encodeURIComponent(trimmedEmail)}`);
+            const loadData = await loadRes.json();
+            if (loadData.success && loadData.backup) {
+              onImportAllData({
+                profile: loadData.backup.profile || { ...profile, name: newUser.name },
+                vehicle: loadData.backup.vehicle || vehicle,
+                shifts: loadData.backup.shifts || [],
+                expenses: loadData.backup.expenses || [],
+                maintenance: loadData.backup.maintenance || [],
+                timestamp: loadData.backup.timestamp || loadData.updatedAt
+              });
+              localStorage.setItem('gmc_last_modified', loadData.backup.timestamp || loadData.updatedAt || new Date().toISOString());
+              await refreshCloudStatus(trimmedEmail);
+              showNotification(
+                'success',
+                'Dados Baixados!',
+                `Seu aparelho foi sincronizado com os dados da nuvem (${loadData.backup.shifts?.length || 0} turnos).`
+              );
+            }
+          },
+          [
+            `Nuvem: ${statusData.shiftsCount || 0} turnos • ${statusData.expensesCount || 0} despesas`,
+            'Clique no botão verde abaixo para baixar e atualizar este aparelho agora.'
+          ]
         );
-
-        if (choice) {
-          const loadRes = await fetch(`/api/backup/load/${encodeURIComponent(trimmedEmail)}`);
-          const loadData = await loadRes.json();
-          if (loadData.success && loadData.backup) {
-            onImportAllData({
-              profile: loadData.backup.profile || { ...profile, name: newUser.name },
-              vehicle: loadData.backup.vehicle || vehicle,
-              shifts: loadData.backup.shifts || [],
-              expenses: loadData.backup.expenses || [],
-              maintenance: loadData.backup.maintenance || [],
-              timestamp: loadData.backup.timestamp || loadData.updatedAt
-            });
-            localStorage.setItem('gmc_last_modified', loadData.backup.timestamp || loadData.updatedAt || new Date().toISOString());
-            await refreshCloudStatus(trimmedEmail);
-            alert(`✅ DADOS DA NUVEM BAIXADOS!\n\nSeu aparelho foi atualizado com os dados da nuvem (${loadData.backup.shifts?.length || 0} turnos).`);
-          }
-        }
       } else {
-        alert(`Conta ${trimmedEmail} conectada!\n\nAinda não há backup salvo na nuvem com este e-mail. Para salvar os dados deste aparelho, clique no botão verde "Enviar dados deste aparelho para a Nuvem".`);
+        // If this device has shifts registered (like tablet), automatically save to cloud!
+        if (shifts.length > 0) {
+          handleUploadToCloud(trimmedEmail, true);
+          showNotification(
+            'success',
+            'Conta Conectada & Nuvem Atualizada!',
+            `Sua conta ${trimmedEmail} foi vinculada e seus ${shifts.length} turnos deste aparelho foram gravados na Nuvem GMC com sucesso!`,
+            [
+              'Agora você pode acessar este mesmo link em outro aparelho (ex: notebook), entrar com seu e-mail e os dados serão carregados.',
+              'Ou usar o PIN de 6 Dígitos a qualquer momento.'
+            ]
+          );
+        } else {
+          showNotification(
+            'info',
+            'Conta Conectada!',
+            `Sua conta ${trimmedEmail} foi vinculada ao GMC Controle.`,
+            [
+              'Nenhum dado foi encontrado na nuvem para este e-mail ainda.',
+              'Para salvar seus dados futuros ou deste aparelho, clique em "Enviar dados deste aparelho para a Nuvem".'
+            ]
+          );
+        }
       }
     } catch (err) {
       console.error("Erro na verificação de nuvem:", err);
@@ -395,10 +563,17 @@ export default function BackupManager({
   };
 
   const handleLogout = () => {
-    if (window.confirm('Tem certeza que deseja sair de sua Conta Google neste dispositivo? Seus dados continuam no armazenamento do aparelho.')) {
-      setGoogleUser(null);
-      setCloudInfo({ checked: false, exists: false });
-    }
+    showConfirmation(
+      'Desconectar Conta Google',
+      'Tem certeza que deseja sair de sua Conta Google neste dispositivo?',
+      'Sim, Desconectar',
+      'Cancelar',
+      () => {
+        setGoogleUser(null);
+        setCloudInfo({ checked: false, exists: false });
+      },
+      ['Seus turnos e despesas locais continuarão salvos com segurança na memória deste aparelho.']
+    );
   };
 
   // Generate full state export codes
@@ -754,7 +929,7 @@ export default function BackupManager({
                   onClick={() => {
                     const emailToUse = inputEmail.trim() || (profile.name === 'Gean Carvalho' ? 'geanmarcelldecarvalho@gmail.com' : '');
                     if (!emailToUse || !emailToUse.includes('@')) {
-                      alert('Por favor, informe seu e-mail!');
+                      showNotification('warning', 'E-mail Obrigatório', 'Por favor, informe seu e-mail do Google para buscar seus dados da nuvem.');
                       return;
                     }
                     handleDownloadFromCloud(emailToUse);
@@ -1077,6 +1252,102 @@ export default function BackupManager({
                   </button>
                 </div>
               </form>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. IN-APP NOTIFICATION & CONFIRMATION MODAL (Zero window.alert/confirm) */}
+      {notification?.isOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto no-print">
+          <div className="flex items-center justify-center min-h-screen p-4 text-center">
+            {/* Backdrop overlay */}
+            <div 
+              className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs transition-opacity" 
+              onClick={() => setNotification(null)} 
+            />
+
+            {/* Modal Dialog Content */}
+            <div className="relative inline-block bg-white rounded-3xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+              
+              <div className="flex items-start gap-3.5">
+                <div className={`p-3 rounded-2xl shrink-0 ${
+                  notification.type === 'success' 
+                    ? 'bg-emerald-100 text-emerald-700' 
+                    : notification.type === 'error'
+                    ? 'bg-red-100 text-red-700'
+                    : notification.type === 'warning'
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-blue-100 text-blue-700'
+                }`}>
+                  {notification.type === 'success' && <CheckCircle2 className="w-6 h-6" />}
+                  {notification.type === 'error' && <AlertCircle className="w-6 h-6" />}
+                  {notification.type === 'warning' && <AlertTriangle className="w-6 h-6" />}
+                  {notification.type === 'info' && <Info className="w-6 h-6" />}
+                  {notification.type === 'confirm' && <Database className="w-6 h-6" />}
+                </div>
+
+                <div className="flex-1 pr-6">
+                  <h3 className="text-sm font-black text-slate-900 leading-snug">
+                    {notification.title}
+                  </h3>
+                  <p className="text-xs text-slate-600 mt-1 leading-relaxed font-semibold">
+                    {notification.message}
+                  </p>
+                </div>
+
+                <button 
+                  onClick={() => setNotification(null)}
+                  className="absolute top-5 right-5 p-1.5 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {notification.bulletPoints && notification.bulletPoints.length > 0 && (
+                <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-1.5 text-xs text-slate-700">
+                  {notification.bulletPoints.map((pt, idx) => (
+                    <div key={idx} className="flex items-start gap-2">
+                      <span className="text-blue-500 font-bold shrink-0">•</span>
+                      <span className="leading-relaxed font-medium">{pt}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="pt-2 flex flex-col sm:flex-row gap-2">
+                {notification.type === 'confirm' ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setNotification(null)}
+                      className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition cursor-pointer"
+                    >
+                      {notification.cancelText || 'Cancelar'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cb = notification.onConfirm;
+                        setNotification(null);
+                        if (cb) cb();
+                      }}
+                      className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs shadow-md transition cursor-pointer"
+                    >
+                      {notification.confirmText || 'Confirmar'}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setNotification(null)}
+                    className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-950 text-white rounded-xl font-black text-xs shadow-md transition cursor-pointer"
+                  >
+                    Entendido
+                  </button>
+                )}
+              </div>
 
             </div>
           </div>

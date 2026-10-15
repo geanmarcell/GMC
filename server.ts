@@ -138,12 +138,17 @@ async function startServer() {
       const userBackup = backupsCache[normalizedEmail];
       
       if (!userBackup || !userBackup.backup) {
-        res.status(404).json({ success: false, error: "No backup found for this account" });
+        res.json({ 
+          success: false, 
+          notFound: true, 
+          error: "Nenhum backup encontrado na nuvem para este e-mail" 
+        });
         return;
       }
       
       res.json({ 
         success: true, 
+        notFound: false,
         updatedAt: userBackup.updatedAt,
         backup: userBackup.backup 
       });
@@ -246,8 +251,9 @@ async function startServer() {
       const pinRecord = pinsCache[cleanPin];
 
       if (!pinRecord || !pinRecord.backup) {
-        res.status(404).json({ 
+        res.json({ 
           success: false, 
+          notFound: true,
           error: `PIN "${cleanPin}" não encontrado ou expirado. Verifique o número digitado ou gere um novo PIN no tablet.` 
         });
         return;
@@ -255,6 +261,7 @@ async function startServer() {
 
       res.json({
         success: true,
+        notFound: false,
         pin: cleanPin,
         email: pinRecord.email,
         updatedAt: pinRecord.createdAt,

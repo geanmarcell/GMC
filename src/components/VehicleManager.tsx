@@ -37,6 +37,7 @@ export default function VehicleManager({
 
   const [showEditVehicle, setShowEditVehicle] = useState(false);
   const [showAddMaintenanceModal, setShowAddMaintenanceModal] = useState(false);
+  const [maintenanceError, setMaintenanceError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Edit Vehicle Form States
@@ -115,9 +116,10 @@ export default function VehicleManager({
     e.preventDefault();
 
     if (mOdometer < 0 || mCost < 0) {
-      alert("Erro: Odômetro ou custos não podem ser negativos!");
+      setMaintenanceError("Erro: Odômetro ou custos não podem ser negativos!");
       return;
     }
+    setMaintenanceError(null);
 
     const newM: Maintenance = {
       id: 'm-' + Math.random().toString(36).substring(2, 9),
@@ -774,6 +776,12 @@ export default function VehicleManager({
             </div>
 
             <form onSubmit={handleAddMaintenanceSubmit} className="p-6 text-xs space-y-4">
+              {maintenanceError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl font-bold text-xs flex items-center justify-between">
+                  <span>⚠️ {maintenanceError}</span>
+                  <button type="button" onClick={() => setMaintenanceError(null)} className="text-red-500 hover:text-red-700 font-black">✕</button>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-slate-600 font-bold block mb-1">Data do Serviço</label>

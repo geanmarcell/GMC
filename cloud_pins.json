@@ -14,5 +14,31 @@
       "maintenance": []
     },
     "createdAt": "2026-10-15T21:08:28.992Z"
+  },
+  "711207": {
+    "pin": "711207",
+    "email": "geanmarcelldecarvalho@gmail.com",
+    "backup": {
+      "shifts": [
+        {
+          "id": "s1",
+          "date": "2026-05-11",
+          "totalKm": 150
+        }
+      ],
+      "expenses": [],
+      "maintenance": []
+    },
+    "createdAt": "2026-10-15T21:21:21.092Z"
+  },
+  "824585": {
+    "pin": "824585",
+    "email": "geanmarcelldecarvalho@gmail.com",
+    "backup": {
+      "shifts": [],
+      "expenses": [],
+      "maintenance": []
+    },
+    "createdAt": "2026-10-15T21:14:56.410Z"
   }
 }

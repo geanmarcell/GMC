@@ -28,6 +28,7 @@ export default function GoalsManager({ profile, vehicle, onUpdateProfile }: Goal
   const [monthlyGoal, setMonthlyGoal] = useState(profile.monthlyGoal);
   const [annualGoal, setAnnualGoal] = useState(profile.annualGoal || (profile.monthlyGoal * 12 || 54000));
   const [workingDays, setWorkingDays] = useState(profile.workingDaysPerWeek);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   // Vehicle settings state
   const [vehicleModel, setVehicleModel] = useState(vehicle.model || '');
@@ -116,7 +117,8 @@ export default function GoalsManager({ profile, vehicle, onUpdateProfile }: Goal
       fuelType,
       avgConsumption: Number(avgConsumption)
     });
-    alert("Perfil de trabalho, ficha do veículo e planejador de faturamento atualizados com sucesso!");
+    setSaveMessage("Perfil de trabalho, ficha do veículo e planejador de faturamento atualizados com sucesso!");
+    setTimeout(() => setSaveMessage(null), 4000);
   };
 
   // Immediate save for the simulation playground specifically
@@ -132,7 +134,8 @@ export default function GoalsManager({ profile, vehicle, onUpdateProfile }: Goal
       simWeeklyFixedCost: Number(simWeeklyFixedCost),
       simMonthlyCellPlan: Number(simMonthlyCellPlan)
     });
-    alert("Projeções e dados do Planejador de Faturamento atualizados e enviados para a Nuvem GMC com sucesso!");
+    setSaveMessage("Projeções e dados do Planejador de Faturamento atualizados e enviados para a Nuvem GMC com sucesso!");
+    setTimeout(() => setSaveMessage(null), 4000);
   };
 
   // Simulation Calculations (4.33 weeks per month)
@@ -155,6 +158,12 @@ export default function GoalsManager({ profile, vehicle, onUpdateProfile }: Goal
 
   return (
     <div className="space-y-6">
+      {saveMessage && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs font-bold flex items-center justify-between animate-in fade-in slide-in-from-top-2">
+          <span>✅ {saveMessage}</span>
+          <button onClick={() => setSaveMessage(null)} className="text-emerald-600 hover:text-emerald-800 text-xs font-black">✕</button>
+        </div>
+      )}
       
       {/* 2 PANELS: METAS AND REGULAR CONFIG / SIMULATOR */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
