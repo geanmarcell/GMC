@@ -1,0 +1,18 @@
+{
+  "370799": {
+    "pin": "370799",
+    "email": "geanmarcelldecarvalho@gmail.com",
+    "backup": {
+      "shifts": [
+        {
+          "id": "s1",
+          "date": "2026-05-11",
+          "totalKm": 200
+        }
+      ],
+      "expenses": [],
+      "maintenance": []
+    },
+    "createdAt": "2026-10-15T21:08:28.992Z"
+  }
+}

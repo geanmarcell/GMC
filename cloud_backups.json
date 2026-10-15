@@ -1,0 +1,16 @@
+{
+  "geanmarcelldecarvalho@gmail.com": {
+    "updatedAt": "2026-10-15T21:08:28.992Z",
+    "backup": {
+      "shifts": [
+        {
+          "id": "s1",
+          "date": "2026-05-11",
+          "totalKm": 200
+        }
+      ],
+      "expenses": [],
+      "maintenance": []
+    }
+  }
+}

@@ -4,18 +4,37 @@ import fs from "fs";
 import { createServer as createViteServer } from "vite";
 
 const BACKUPS_FILE_PATH = path.join(process.cwd(), "cloud_backups.json");
+const TMP_BACKUPS_FILE_PATH = "/tmp/cloud_backups.json";
+const PINS_FILE_PATH = path.join(process.cwd(), "cloud_pins.json");
+const TMP_PINS_FILE_PATH = "/tmp/cloud_pins.json";
 
-// In-memory cache for ultra-speed sync, initialized from disk
+// In-memory caches for ultra-speed sync, initialized from disk
 let backupsCache: { [email: string]: any } = {};
+let pinsCache: { [pin: string]: { pin: string; email: string; backup: any; createdAt: string } } = {};
 
 const loadBackupsFromDisk = () => {
   try {
     if (fs.existsSync(BACKUPS_FILE_PATH)) {
       const rawData = fs.readFileSync(BACKUPS_FILE_PATH, "utf-8");
       backupsCache = JSON.parse(rawData);
+    } else if (fs.existsSync(TMP_BACKUPS_FILE_PATH)) {
+      const rawData = fs.readFileSync(TMP_BACKUPS_FILE_PATH, "utf-8");
+      backupsCache = JSON.parse(rawData);
     }
   } catch (err) {
     console.error("Error reading backups from disk:", err);
+  }
+
+  try {
+    if (fs.existsSync(PINS_FILE_PATH)) {
+      const rawPins = fs.readFileSync(PINS_FILE_PATH, "utf-8");
+      pinsCache = JSON.parse(rawPins);
+    } else if (fs.existsSync(TMP_PINS_FILE_PATH)) {
+      const rawPins = fs.readFileSync(TMP_PINS_FILE_PATH, "utf-8");
+      pinsCache = JSON.parse(rawPins);
+    }
+  } catch (err) {
+    console.error("Error reading pins from disk:", err);
   }
 };
 
@@ -24,9 +43,21 @@ loadBackupsFromDisk();
 // Function to save backups dictionary to disk
 const saveBackupsToDisk = () => {
   try {
-    fs.writeFileSync(BACKUPS_FILE_PATH, JSON.stringify(backupsCache, null, 2), "utf-8");
+    const data = JSON.stringify(backupsCache, null, 2);
+    fs.writeFileSync(BACKUPS_FILE_PATH, data, "utf-8");
+    try { fs.writeFileSync(TMP_BACKUPS_FILE_PATH, data, "utf-8"); } catch (_) {}
   } catch (err) {
     console.error("Error writing backups dictionary to disk:", err);
+  }
+};
+
+const savePinsToDisk = () => {
+  try {
+    const data = JSON.stringify(pinsCache, null, 2);
+    fs.writeFileSync(PINS_FILE_PATH, data, "utf-8");
+    try { fs.writeFileSync(TMP_PINS_FILE_PATH, data, "utf-8"); } catch (_) {}
+  } catch (err) {
+    console.error("Error writing pins to disk:", err);
   }
 };
 
@@ -35,9 +66,30 @@ async function startServer() {
   const PORT = 3000;
 
   // JSON parsing middleware
-  app.use(express.json({ limit: "20mb" }));
+  app.use(express.json({ limit: "25mb" }));
 
-  // API endpoints
+  // CORS middleware for multi-device cross-origin support
+  app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept");
+    if (req.method === "OPTIONS") {
+      res.sendStatus(200);
+      return;
+    }
+    next();
+  });
+
+  // Health and ping endpoint
+  app.get("/api/backup/ping", (_req, res) => {
+    res.json({
+      success: true,
+      status: "online",
+      serverTime: new Date().toISOString(),
+      cachedAccounts: Object.keys(backupsCache).length,
+      activePins: Object.keys(pinsCache).length
+    });
+  });
 
   // Save/Upload backup endpoint
   app.post("/api/backup/save", (req, res) => {
@@ -85,7 +137,7 @@ async function startServer() {
       const normalizedEmail = email.toLowerCase().trim();
       const userBackup = backupsCache[normalizedEmail];
       
-      if (!userBackup) {
+      if (!userBackup || !userBackup.backup) {
         res.status(404).json({ success: false, error: "No backup found for this account" });
         return;
       }
@@ -128,13 +180,89 @@ async function startServer() {
         exists: true,
         updatedAt: userBackup.updatedAt || backup.timestamp,
         driverName: backup.profile?.name || "Motorista",
-        vehiclePlate: backup.vehicle?.plate || "",
-        shiftsCount: backup.shifts ? backup.shifts.length : 0,
-        expensesCount: backup.expenses ? backup.expenses.length : 0,
-        maintenanceCount: backup.maintenance ? backup.maintenance.length : 0
+        vehiclePlate: backup.vehicle?.licensePlate || backup.vehicle?.plate || "",
+        shiftsCount: Array.isArray(backup.shifts) ? backup.shifts.length : 0,
+        expensesCount: Array.isArray(backup.expenses) ? backup.expenses.length : 0,
+        maintenanceCount: Array.isArray(backup.maintenance) ? backup.maintenance.length : 0
       });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message || "Internal server error" });
+    }
+  });
+
+  // 6-DIGIT QUICK SYNC PIN GENERATION
+  app.post("/api/backup/pin/generate", (req, res) => {
+    try {
+      const { email, backup } = req.body;
+      if (!backup) {
+        res.status(400).json({ success: false, error: "Dados de backup ausentes" });
+        return;
+      }
+
+      // Generate a random 6-digit numeric PIN
+      const pin = Math.floor(100000 + Math.random() * 900000).toString();
+      const normalizedEmail = (email || "motorista@gmc.com").toLowerCase().trim();
+
+      const pinRecord = {
+        pin,
+        email: normalizedEmail,
+        backup,
+        createdAt: new Date().toISOString()
+      };
+
+      pinsCache[pin] = pinRecord;
+      savePinsToDisk();
+
+      // Also persist to email cache
+      if (normalizedEmail.includes("@")) {
+        backupsCache[normalizedEmail] = {
+          updatedAt: pinRecord.createdAt,
+          backup
+        };
+        saveBackupsToDisk();
+      }
+
+      console.log(`Generated Quick Sync PIN ${pin} for ${normalizedEmail}.`);
+      res.json({
+        success: true,
+        pin,
+        createdAt: pinRecord.createdAt,
+        shiftsCount: backup.shifts?.length || 0,
+        expensesCount: backup.expenses?.length || 0
+      });
+    } catch (err: any) {
+      console.error("Error generating sync PIN:", err);
+      res.status(500).json({ success: false, error: err.message || "Erro ao gerar PIN" });
+    }
+  });
+
+  // 6-DIGIT QUICK SYNC PIN LOAD
+  app.get("/api/backup/pin/load/:pin", (req, res) => {
+    try {
+      const rawPin = req.params.pin || "";
+      const cleanPin = rawPin.replace(/[^0-9]/g, "");
+
+      loadBackupsFromDisk();
+      const pinRecord = pinsCache[cleanPin];
+
+      if (!pinRecord || !pinRecord.backup) {
+        res.status(404).json({ 
+          success: false, 
+          error: `PIN "${cleanPin}" não encontrado ou expirado. Verifique o número digitado ou gere um novo PIN no tablet.` 
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        pin: cleanPin,
+        email: pinRecord.email,
+        updatedAt: pinRecord.createdAt,
+        backup: pinRecord.backup
+      });
+    } catch (err: any) {
+      console.error("Error loading sync PIN:", err);
+      res.status(500).json({ success: false, error: err.message || "Erro ao consultar PIN" });
     }
   });
 

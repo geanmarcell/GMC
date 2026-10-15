@@ -60,6 +60,15 @@ export default function BackupManager({
   const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const [actionLoading, setActionLoading] = useState<'upload' | 'download' | 'refresh' | null>(null);
 
+  // Server health indicator
+  const [serverOnline, setServerOnline] = useState<boolean | null>(null);
+
+  // 6-Digit PIN Quick Sync state
+  const [generatedPin, setGeneratedPin] = useState<{ pin: string; createdAt: string; shiftsCount: number } | null>(null);
+  const [inputPin, setInputPin] = useState('');
+  const [pinLoading, setPinLoading] = useState(false);
+  const [pinCopied, setPinCopied] = useState(false);
+
   // Cloud status state for the connected email
   const [cloudInfo, setCloudInfo] = useState<{
     checked: boolean;
@@ -79,6 +88,18 @@ export default function BackupManager({
       localStorage.removeItem('cpma_google_user');
     }
   }, [googleUser]);
+
+  // Check server ping on mount
+  useEffect(() => {
+    fetch('/api/backup/ping')
+      .then(res => res.json())
+      .then(data => {
+        setServerOnline(data.success && data.status === 'online');
+      })
+      .catch(() => {
+        setServerOnline(false);
+      });
+  }, []);
 
   // Check cloud backup status whenever user email changes or component loads
   const refreshCloudStatus = async (email: string) => {
@@ -111,9 +132,10 @@ export default function BackupManager({
 
   // Upload current device data to Cloud
   const handleUploadToCloud = async (overrideEmail?: string, silent = false) => {
-    const targetEmail = (overrideEmail || googleUser?.email || '').trim().toLowerCase();
+    const targetEmail = (overrideEmail || googleUser?.email || inputEmail || '').trim().toLowerCase();
     if (!targetEmail || !targetEmail.includes('@')) {
       alert('Por favor, conecte ou informe seu e-mail da Conta Google primeiro!');
+      setInputEmail(profile.name === 'Gean Carvalho' ? 'geanmarcelldecarvalho@gmail.com' : '');
       setShowLoginModal(true);
       return;
     }
@@ -145,10 +167,18 @@ export default function BackupManager({
         localStorage.setItem(emailKey, JSON.stringify(currentPayload));
         localStorage.setItem('gmc_last_modified', currentPayload.timestamp);
 
+        if (!googleUser || googleUser.email !== targetEmail) {
+          setGoogleUser({
+            email: targetEmail,
+            name: profile.name || 'Motorista GMC',
+            photo: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(profile.name || 'Motorista')}`
+          });
+        }
+
         await refreshCloudStatus(targetEmail);
 
         if (!silent) {
-          alert(`✅ DADOS SALVOS NA NUVEM COM SUCESSO!\n\nForam transmitidos para sua conta (${targetEmail}):\n• ${shifts.length} turnos registrados\n• ${expenses.length} despesas extras\n• ${maintenance.length} manutenções\n• Dados do motorista e veículo\n\nAo abrir o aplicativo em outro celular ou computador, basta conectar com este mesmo e-mail (${targetEmail}) e clicar em "Baixar dados da Nuvem"!`);
+          alert(`✅ DADOS SALVOS NA NUVEM COM SUCESSO!\n\nForam transmitidos para sua conta (${targetEmail}):\n• ${shifts.length} turnos registrados\n• ${expenses.length} despesas extras\n• ${maintenance.length} manutenções\n• Dados do motorista e veículo\n\nAgora, no seu notebook, basta entrar com este mesmo e-mail (${targetEmail}) e clicar em "Baixar dados da Nuvem" ou usar o PIN de 6 dígitos!`);
         }
       } else {
         throw new Error(data.error || 'Falha ao salvar no servidor');
@@ -159,20 +189,17 @@ export default function BackupManager({
       // Local fallback
       const emailKey = 'gmc_cloud_backup_' + targetEmail;
       localStorage.setItem(emailKey, JSON.stringify(currentPayload));
-      alert(`⚠️ Não foi possível sincronizar com o servidor no momento. Os dados foram salvos no armazenamento local deste aparelho.`);
+      alert(`⚠️ Atenção: Não foi possível sincronizar com o servidor da nuvem no momento (${err.message || 'Falha de rede'}). Os dados foram salvos no armazenamento local deste aparelho. Use a opção de Código de Transferência ou gere o PIN de 6 dígitos.`);
     }
   };
 
-  // Download Cloud data to current device
-  const handleDownloadFromCloud = async () => {
-    const targetEmail = (googleUser?.email || '').trim().toLowerCase();
-    if (!targetEmail) {
+  // Download Cloud data to current device - NEVER BLOCKED!
+  const handleDownloadFromCloud = async (overrideEmail?: string) => {
+    const targetEmail = (overrideEmail || googleUser?.email || inputEmail || '').trim().toLowerCase();
+    if (!targetEmail || !targetEmail.includes('@')) {
       alert('Por favor, informe seu e-mail da Conta Google primeiro!');
+      setInputEmail(profile.name === 'Gean Carvalho' ? 'geanmarcelldecarvalho@gmail.com' : '');
       setShowLoginModal(true);
-      return;
-    }
-
-    if (!window.confirm(`Deseja baixar os dados salvos na Nuvem para este aparelho?\n\nOs turnos e despesas salvos na nuvem para (${targetEmail}) irão carregar neste aparelho para que fiquem idênticos ao seu outro dispositivo.`)) {
       return;
     }
 
@@ -198,16 +225,115 @@ export default function BackupManager({
         localStorage.setItem(emailKey, JSON.stringify(backup));
         localStorage.setItem('gmc_last_modified', backup.timestamp || data.updatedAt || new Date().toISOString());
 
+        if (!googleUser || googleUser.email !== targetEmail) {
+          setGoogleUser({
+            email: targetEmail,
+            name: backup.profile?.name || profile.name || 'Motorista GMC',
+            photo: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(backup.profile?.name || 'Motorista')}`
+          });
+        }
+
         await refreshCloudStatus(targetEmail);
 
-        alert(`✅ DADOS DA NUVEM BAIXADOS COM SUCESSO!\n\nForam sincronizados neste aparelho:\n• ${backup.shifts?.length || 0} turnos\n• ${backup.expenses?.length || 0} despesas extras\n• ${backup.maintenance?.length || 0} manutenções\n\nTodos os dados salvos pelo outro dispositivo agora estão atualizados aqui!`);
+        alert(`✅ DADOS DA NUVEM BAIXADOS COM SUCESSO!\n\nForam sincronizados neste aparelho para (${targetEmail}):\n• ${backup.shifts?.length || 0} turnos carregados\n• ${backup.expenses?.length || 0} despesas extras\n• ${backup.maintenance?.length || 0} manutenções\n• Veículo: ${backup.vehicle?.model || 'Configurado'}\n\nTodos os dados salvos pelo outro dispositivo agora estão 100% atualizados aqui!`);
       } else {
-        alert(`Nenhum backup foi encontrado na nuvem para ${targetEmail}.\n\nSe você cadastrou seus dados no outro aparelho, abra o outro aparelho e clique no botão verde "Enviar dados deste aparelho para a Nuvem".`);
+        // Did not find in server
+        alert(`⚠️ Nenhum backup encontrado na nuvem para o e-mail:\n"${targetEmail}"\n\nCOMO RESOLVER:\n1. No seu TABLET, abra esta mesma tela "Backup & Nuvem" e confirme se clicou no botão verde "Enviar dados deste aparelho para a Nuvem".\n2. Verifique se o e-mail no tablet é exatamente "${targetEmail}".\n3. Alternativa Instantânea: No tablet, clique em "Gerar PIN de 6 Dígitos" logo abaixo e digite o número aqui no notebook!`);
       }
     } catch (err: any) {
       setActionLoading(null);
       console.error("Erro ao baixar da nuvem:", err);
-      alert('Erro ao conectar ao servidor da nuvem. Verifique sua conexão e tente novamente.');
+      alert(`⚠️ Erro de conexão com o servidor ao baixar da nuvem: ${err.message || 'Verifique a rede'}\n\nDica: você também pode usar a Sincronização por PIN de 6 Dígitos ou colar o Código de Transferência abaixo.`);
+    }
+  };
+
+  // Generate 6-Digit PIN on tablet/source device
+  const handleGeneratePin = async () => {
+    setPinLoading(true);
+    setPinCopied(false);
+    try {
+      const currentPayload = {
+        meta: 'GMC_SECURE_BACKUP',
+        version: '1.0',
+        timestamp: new Date().toISOString(),
+        profile,
+        vehicle,
+        shifts,
+        expenses,
+        maintenance
+      };
+
+      const targetEmail = googleUser?.email || inputEmail || (profile.name === 'Gean Carvalho' ? 'geanmarcelldecarvalho@gmail.com' : 'motorista@gmc.com');
+
+      const res = await fetch('/api/backup/pin/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          email: targetEmail, 
+          backup: currentPayload 
+        })
+      });
+      const data = await res.json();
+      setPinLoading(false);
+
+      if (data.success && data.pin) {
+        setGeneratedPin({
+          pin: data.pin,
+          createdAt: data.createdAt,
+          shiftsCount: shifts.length
+        });
+      } else {
+        throw new Error(data.error || 'Falha ao gerar PIN');
+      }
+    } catch (err: any) {
+      setPinLoading(false);
+      alert('Erro ao gerar PIN no servidor: ' + (err.message || 'Verifique a conexão'));
+    }
+  };
+
+  // Load by 6-Digit PIN on notebook/target device
+  const handleLoadByPin = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanPin = inputPin.replace(/[^0-9]/g, '');
+    if (cleanPin.length !== 6) {
+      alert('Por favor, digite o PIN de 6 números gerado no tablet/celular!');
+      return;
+    }
+
+    setPinLoading(true);
+
+    try {
+      const res = await fetch(`/api/backup/pin/load/${cleanPin}`);
+      const data = await res.json();
+      setPinLoading(false);
+
+      if (data.success && data.backup) {
+        const backup = data.backup;
+        onImportAllData({
+          profile: backup.profile || profile,
+          vehicle: backup.vehicle || vehicle,
+          shifts: backup.shifts || [],
+          expenses: backup.expenses || [],
+          maintenance: backup.maintenance || [],
+          timestamp: backup.timestamp || data.updatedAt
+        });
+
+        if (data.email && data.email.includes('@')) {
+          setGoogleUser({
+            email: data.email,
+            name: backup.profile?.name || profile.name || 'Motorista GMC',
+            photo: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(backup.profile?.name || 'Motorista')}`
+          });
+        }
+
+        alert(`✅ SUCESSO! DADOS IMPORTADOS VIA PIN!\n\nForam sincronizados com perfeição neste aparelho:\n• ${backup.shifts?.length || 0} turnos registrados\n• ${backup.expenses?.length || 0} despesas extras\n• ${backup.maintenance?.length || 0} manutenções\n• Veículo: ${backup.vehicle?.model || 'Configurado'}\n\nO notebook agora está exatamente idêntico ao seu tablet!`);
+        setInputPin('');
+      } else {
+        throw new Error(data.error || 'PIN não localizado no servidor');
+      }
+    } catch (err: any) {
+      setPinLoading(false);
+      alert(`⚠️ ${err.message || 'PIN não encontrado no servidor'}\n\nVerifique:\n1. Se o código digitado foi exatamente o exibido no tablet.\n2. Se você clicou no tablet em "Gerar PIN de 6 Dígitos".`);
     }
   };
 
@@ -236,37 +362,14 @@ export default function BackupManager({
       if (statusData.success && statusData.exists) {
         // Cloud backup exists!
         const cloudDate = statusData.updatedAt ? new Date(statusData.updatedAt).toLocaleString('pt-BR') : 'recente';
-        const hasLocalData = shifts.length > 0;
-
-        if (!hasLocalData) {
-          // This device is empty or fresh: auto download!
-          const loadRes = await fetch(`/api/backup/load/${encodeURIComponent(trimmedEmail)}`);
-          const loadData = await loadRes.json();
-          if (loadData.success && loadData.backup) {
-            onImportAllData({
-              profile: loadData.backup.profile || { ...profile, name: newUser.name },
-              vehicle: loadData.backup.vehicle || vehicle,
-              shifts: loadData.backup.shifts || [],
-              expenses: loadData.backup.expenses || [],
-              maintenance: loadData.backup.maintenance || [],
-              timestamp: loadData.backup.timestamp || loadData.updatedAt
-            });
-            localStorage.setItem('gmc_last_modified', loadData.backup.timestamp || loadData.updatedAt || new Date().toISOString());
-            await refreshCloudStatus(trimmedEmail);
-            alert(`✅ CONTA CONECTADA E DADOS RESTAURADOS!\n\nBaixamos automaticamente o seu backup da nuvem salvo em ${cloudDate}:\n• ${loadData.backup.shifts?.length || 0} turnos carregados\n• ${loadData.backup.expenses?.length || 0} despesas carregadas`);
-            return;
-          }
-        }
-
-        // Both cloud and device have data: prompt the user!
+        
+        // Auto pull if user confirms or if device has standard initial mock
         const choice = window.confirm(
           `Encontramos um backup na nuvem para ${trimmedEmail} salvo em ${cloudDate} com ${statusData.shiftsCount || 0} turnos.\n\n` +
-          `• Clique em [OK] para BAIXAR os dados da nuvem para este aparelho.\n` +
-          `• Clique em [CANCELAR] se este aparelho é o seu principal e você quer ENVIAR os dados dele (${shifts.length} turnos) para a nuvem.`
+          `Deseja BAIXAR os dados da nuvem agora para este aparelho?`
         );
 
         if (choice) {
-          // User chose to download
           const loadRes = await fetch(`/api/backup/load/${encodeURIComponent(trimmedEmail)}`);
           const loadData = await loadRes.json();
           if (loadData.success && loadData.backup) {
@@ -282,18 +385,12 @@ export default function BackupManager({
             await refreshCloudStatus(trimmedEmail);
             alert(`✅ DADOS DA NUVEM BAIXADOS!\n\nSeu aparelho foi atualizado com os dados da nuvem (${loadData.backup.shifts?.length || 0} turnos).`);
           }
-        } else {
-          // User chose to upload current device data
-          await handleUploadToCloud(trimmedEmail);
         }
       } else {
-        // NO backup on cloud yet! Automatically upload current device's data so the cloud is populated immediately!
-        await handleUploadToCloud(trimmedEmail);
+        alert(`Conta ${trimmedEmail} conectada!\n\nAinda não há backup salvo na nuvem com este e-mail. Para salvar os dados deste aparelho, clique no botão verde "Enviar dados deste aparelho para a Nuvem".`);
       }
     } catch (err) {
       console.error("Erro na verificação de nuvem:", err);
-      // Fallback: upload current data
-      await handleUploadToCloud(trimmedEmail);
     }
   };
 
@@ -576,15 +673,11 @@ export default function BackupManager({
                 </span>
               </button>
 
-              {/* DOWNLOAD BUTTON */}
+              {/* DOWNLOAD BUTTON - ALWAYS ENABLED */}
               <button
-                disabled={actionLoading !== null || !cloudInfo.exists}
-                onClick={handleDownloadFromCloud}
-                className={`p-4 rounded-2xl font-black text-xs transition flex flex-col items-start gap-1 text-left ${
-                  cloudInfo.exists 
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md cursor-pointer' 
-                    : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
-                }`}
+                disabled={actionLoading !== null}
+                onClick={() => handleDownloadFromCloud()}
+                className="p-4 rounded-2xl font-black text-xs transition flex flex-col items-start gap-1 text-left bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-md cursor-pointer disabled:opacity-50"
               >
                 <div className="flex items-center justify-between w-full">
                   <span className="flex items-center gap-2 text-sm font-black">
@@ -596,15 +689,15 @@ export default function BackupManager({
                     Baixar dados da Nuvem para este aparelho
                   </span>
                   <span className={`text-[10px] px-2 py-0.5 rounded-md uppercase font-mono ${
-                    cloudInfo.exists ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-500'
+                    cloudInfo.exists ? 'bg-blue-500 text-white' : 'bg-blue-400 text-white'
                   }`}>
-                    Download
+                    {cloudInfo.exists ? 'Backup Pronto' : 'Baixar Agora'}
                   </span>
                 </div>
-                <span className={`text-[11px] font-normal ${cloudInfo.exists ? 'text-blue-100' : 'text-slate-400'}`}>
+                <span className="text-[11px] text-blue-100 font-normal">
                   {cloudInfo.exists 
                     ? `Puxa os dados salvos pelo outro dispositivo (${cloudInfo.shiftsCount || 0} turnos na nuvem) e atualiza este aparelho.`
-                    : 'Disponível após enviar um backup da nuvem a partir do seu aparelho principal.'}
+                    : 'Clique aqui para puxar os dados salvos pelo seu tablet ou celular na nuvem.'}
                 </span>
               </button>
 
@@ -614,47 +707,216 @@ export default function BackupManager({
             <div className="p-4 bg-blue-50/70 border border-blue-100 rounded-2xl space-y-2 text-xs text-slate-700">
               <p className="font-bold text-blue-900 flex items-center gap-1.5 text-xs">
                 <Sparkles className="w-4 h-4 text-blue-600" />
-                Como usar para abrir seus dados em outro aparelho:
+                Como sincronizar entre seu Tablet e seu Notebook:
               </p>
               <div className="space-y-1 text-[11px] text-slate-600 leading-relaxed">
                 <p>
-                  <strong>1. No aparelho onde você já tem suas corridas (ex: celular):</strong> clique no botão verde <strong>"Enviar dados deste aparelho para a Nuvem"</strong> acima.
+                  <strong>1. No TABLET (onde você cadastrou os turnos):</strong> clique no botão verde <strong>"Enviar dados deste aparelho para a Nuvem"</strong> acima.
                 </p>
                 <p>
-                  <strong>2. No outro aparelho (ex: notebook, tablet ou novo celular):</strong> abra esta mesma tela, clique em <strong>"Entrar com a Conta do Google"</strong> com o mesmo e-mail (<strong>{googleUser.email}</strong>) e clique no botão azul <strong>"Baixar dados da Nuvem para este aparelho"</strong>.
+                  <strong>2. No NOTEBOOK:</strong> conecte com o mesmo e-mail (<strong>{googleUser.email}</strong>) e clique no botão azul <strong>"Baixar dados da Nuvem para este aparelho"</strong>.
                 </p>
                 <p>
-                  <strong>3. Salvamento Contínuo:</strong> A partir de agora, sempre que você adicionar ou editar corridas e despesas, o aplicativo atualizará automaticamente a nuvem em segundo plano!
+                  <strong>💡 Dica Super Rápida:</strong> Se preferir não digitar e-mail, use a <strong>Sincronização por PIN de 6 Dígitos</strong> logo abaixo! É instantânea.
                 </p>
               </div>
             </div>
           </div>
         ) : (
-          <div className="p-6 bg-slate-50 border border-dashed border-slate-200 rounded-2xl text-center space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center mx-auto font-black text-xl">
-              G
-            </div>
-            <div className="space-y-1 max-w-md mx-auto">
+          <div className="p-6 bg-slate-50 border border-dashed border-slate-200 rounded-2xl space-y-5">
+            <div className="text-center space-y-2 max-w-lg mx-auto">
+              <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center mx-auto font-black text-xl">
+                G
+              </div>
               <h4 className="text-sm font-black text-slate-800">
                 Sincronize automaticamente seus aparelhos sem precisar de código manual
               </h4>
               <p className="text-xs text-slate-500 leading-relaxed font-semibold">
-                Ao informar seu e-mail do Google, seus turnos, despesas e manutenções são salvos na nuvem e você pode acessá-los em qualquer outro celular ou computador com 1 clique.
+                Ao conectar seu e-mail do Google, seus turnos e despesas ficam sincronizados na nuvem para você abrir no tablet, celular ou notebook.
               </p>
             </div>
-            <button
-              onClick={() => {
-                setInputEmail(profile.name === 'Gean Carvalho' ? 'geanmarcelldecarvalho@gmail.com' : '');
-                setInputName(profile.name || '');
-                setShowLoginModal(true);
-              }}
-              className="py-3 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs shadow-md transition inline-flex items-center gap-2 cursor-pointer"
-            >
-              <LogIn className="w-4 h-4" />
-              <span>Conectar Minha Conta Google Agora</span>
-            </button>
+
+            {/* DIRECT EMAIL INPUT FORM FOR FAST NOTEBOOK SYNC */}
+            <div className="max-w-md mx-auto p-4 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-3">
+              <label className="text-[11px] font-bold text-slate-700 block">
+                Digite seu e-mail para conectar e baixar:
+              </label>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="email"
+                  placeholder="seuemail@gmail.com"
+                  defaultValue={profile.name === 'Gean Carvalho' ? 'geanmarcelldecarvalho@gmail.com' : ''}
+                  onChange={(e) => setInputEmail(e.target.value)}
+                  className="flex-1 p-2.5 bg-slate-50 border border-slate-250 rounded-xl font-mono text-xs text-slate-800 outline-none focus:outline-blue-600 focus:bg-white"
+                />
+                <button
+                  disabled={actionLoading !== null}
+                  onClick={() => {
+                    const emailToUse = inputEmail.trim() || (profile.name === 'Gean Carvalho' ? 'geanmarcelldecarvalho@gmail.com' : '');
+                    if (!emailToUse || !emailToUse.includes('@')) {
+                      alert('Por favor, informe seu e-mail!');
+                      return;
+                    }
+                    handleDownloadFromCloud(emailToUse);
+                  }}
+                  className="py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
+                >
+                  {actionLoading === 'download' ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <CloudDownload className="w-4 h-4" />
+                  )}
+                  <span>Baixar da Nuvem</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="text-center">
+              <button
+                onClick={() => {
+                  setInputEmail(profile.name === 'Gean Carvalho' ? 'geanmarcelldecarvalho@gmail.com' : '');
+                  setInputName(profile.name || '');
+                  setShowLoginModal(true);
+                }}
+                className="py-2 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition inline-flex items-center gap-2 cursor-pointer"
+              >
+                <LogIn className="w-3.5 h-3.5 text-blue-600" />
+                <span>Personalizar Nome & Conta Completa</span>
+              </button>
+            </div>
           </div>
         )}
+      </div>
+
+      {/* 3. ULTRA-FAST 6-DIGIT PIN SYNC MODULE (TABLET <--> NOTEBOOK) */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-purple-50 text-purple-600 rounded-xl">
+              <Key className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                Sincronização Rápida por PIN (6 Dígitos)
+                <span className="px-2 py-0.5 bg-purple-100 text-purple-800 text-[10px] font-bold rounded-full normal-case">
+                  Tablet ➔ Notebook
+                </span>
+              </h3>
+              <p className="text-[11px] text-slate-500 font-medium">
+                Conecte dois aparelhos instantaneamente sem precisar digitar senhas ou e-mails longos
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              {serverOnline === false ? 'Servidor Offline' : 'Servidor GMC Conectado'}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          
+          {/* SENDER COLUMN (TABLET / CELULAR) */}
+          <div className="p-5 bg-gradient-to-br from-slate-50 to-purple-50/30 rounded-2xl border border-slate-200/90 space-y-4 flex flex-col justify-between">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-slate-900 font-black text-xs uppercase tracking-wider">
+                <Smartphone className="w-4 h-4 text-purple-600" />
+                <span>1. No Tablet ou Celular (Origem dos Dados)</span>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed font-semibold">
+                Gere um código PIN numérico de 6 dígitos para transferir todos os seus <strong>{shifts.length} turnos</strong> e despesas para o seu notebook em segundos.
+              </p>
+            </div>
+
+            {generatedPin ? (
+              <div className="p-4 bg-white rounded-xl border border-purple-200 shadow-xs space-y-3 text-center">
+                <span className="text-[10px] font-mono font-bold uppercase text-purple-600 tracking-wider">
+                  Código de Conexão Rápida:
+                </span>
+                
+                <div className="text-3xl font-black font-mono tracking-widest text-purple-700 bg-purple-50/80 py-2.5 px-4 rounded-xl border border-purple-100 select-all">
+                  {generatedPin.pin.slice(0, 3)} {generatedPin.pin.slice(3, 6)}
+                </div>
+
+                <p className="text-[11px] text-slate-600 font-semibold">
+                  Digite este número de 6 dígitos no seu notebook na caixa ao lado!
+                </p>
+
+                <div className="flex gap-2 justify-center">
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(generatedPin.pin);
+                      setPinCopied(true);
+                      setTimeout(() => setPinCopied(false), 2000);
+                    }}
+                    className="py-1.5 px-3 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                  >
+                    {pinCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{pinCopied ? 'Copiado!' : 'Copiar PIN'}</span>
+                  </button>
+
+                  <button
+                    onClick={handleGeneratePin}
+                    className="py-1.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Gerar Outro</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                disabled={pinLoading}
+                onClick={handleGeneratePin}
+                className="w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white rounded-xl font-black text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {pinLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />}
+                <span>Gerar PIN de 6 Dígitos no Tablet</span>
+              </button>
+            )}
+          </div>
+
+          {/* RECEIVER COLUMN (NOTEBOOK / PC) */}
+          <div className="p-5 bg-gradient-to-br from-slate-50 to-blue-50/30 rounded-2xl border border-slate-200/90 space-y-4 flex flex-col justify-between">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-slate-900 font-black text-xs uppercase tracking-wider">
+                <Laptop className="w-4 h-4 text-blue-600" />
+                <span>2. No Notebook (Receber os Dados)</span>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed font-semibold">
+                Digite os 6 números gerados no seu tablet para baixar instantaneamente todas as suas corridas, odômetros e despesas para este notebook.
+              </p>
+            </div>
+
+            <form onSubmit={handleLoadByPin} className="space-y-3">
+              <div>
+                <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">
+                  PIN de 6 Dígitos do Tablet
+                </label>
+                <input
+                  type="text"
+                  maxLength={6}
+                  placeholder="Ex: 849201"
+                  value={inputPin}
+                  onChange={(e) => setInputPin(e.target.value.replace(/[^0-9]/g, ''))}
+                  className="w-full p-3 bg-white border border-slate-300 rounded-xl font-mono text-center text-xl font-black tracking-widest text-slate-800 placeholder:text-slate-300 focus:outline-blue-600 shadow-inner"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={pinLoading || inputPin.length !== 6}
+                className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:text-slate-500 text-white rounded-xl font-black text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {pinLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
+                <span>Baixar Dados do Tablet via PIN</span>
+              </button>
+            </form>
+          </div>
+
+        </div>
       </div>
 
       {/* 2. TRANFER CODES (CELULAR <--> COMPUTADOR) SECTION */}
